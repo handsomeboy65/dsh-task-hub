@@ -221,3 +221,92 @@ test('opening a session resolves the service per click and explains failures', a
   assert.deepEqual(archived, ['session-old'])
   assert.deepEqual(await lazy.openSession(''), { ok: false, reason: 'missing' })
 })
+
+function expand(node, out = []) {
+  if (node === null || node === undefined || typeof node !== 'object') return out
+  if (Array.isArray(node)) {
+    for (const child of node) expand(child, out)
+    return out
+  }
+  out.push(node)
+  if (typeof node.type === 'function') expand(node.type({ ...node.props }), out)
+  else expand(node.props?.children, out)
+  return out
+}
+
+test('the dispatch dialog treats the branch name as the one field to fill', async () => {
+  let captured
+  globalThis.window = { __ModuleLoader__: { load: (bundle) => { captured = bundle } } }
+  await import('../lib/client.js')
+  const client = (captured ?? globalThis.__taskHubBundle).factory((name) => {
+    if (name === 'react') return fakeReact()
+    throw new Error(`unexpected module: ${name}`)
+  })
+  const { DispatchModal } = client.__test
+
+  const form = {
+    mode: 'workspace',
+    workspaceId: 'w1',
+    workspacePath: '/tmp/repo',
+    baseBranch: 'master',
+    useWorktree: false,
+    smartCheckout: true,
+    prompt: '',
+    branchName: '',
+  }
+  const modal = DispatchModal({
+    t: (key) => key,
+    story: { id: '1004328', name: '后端-客户端上传文件类型为“报关资料”' },
+    boot: { workspaces: [{ id: 'w1', title: 'TMS2.0', path: '/Users/spring/TMS2.0' }] },
+    form,
+    setForm: () => {},
+    onSubmit: () => {},
+    onClose: () => {},
+    busy: false,
+    error: null,
+  })
+  const nodes = expand(modal)
+
+  const keyField = nodes.find((node) => node.props?.className === 'tt-field tt-field-key')
+  assert.ok(keyField, 'branch field must use the accented block')
+
+  const label = keyField.props.children[0]
+  assert.equal(label.props.className, 'tt-label tt-label-key')
+  assert.equal(label.props.children[0], 'dispatchBranch')
+  assert.equal(label.props.children[1].props.className, 'tt-label-badge')
+  assert.equal(label.props.children[1].props.children, 'dispatchBranchRequiredTag')
+
+  const input = keyField.props.children[1]
+  assert.equal(input.props.className, 'tt-input tt-input-key')
+  assert.equal(input.props.autoFocus, true)
+  assert.equal(input.props.value, '')
+
+  // Only the branch field is accented; the target/base/prompt fields stay plain.
+  assert.equal(nodes.filter((node) => node.props?.className === 'tt-field tt-field-key').length, 1)
+  assert.ok(
+    nodes.indexOf(keyField) < nodes.findIndex((node) => node.props?.className === 'tt-select'),
+    'branch name must come before the workspace picker',
+  )
+
+  // Submitting with an empty branch paints the input itself, not just the footer error.
+  const invalid = DispatchModal({
+    t: (key) => key,
+    story: { id: '1004328', name: 'x' },
+    boot: { workspaces: [] },
+    form,
+    setForm: () => {},
+    onSubmit: () => {},
+    onClose: () => {},
+    busy: false,
+    error: { message: 'dispatchBranchRequired', code: 'dispatch/missing-branch' },
+  })
+  const invalidInput = expand(invalid).find((node) => node.type === 'input')
+  assert.equal(invalidInput.props.className, 'tt-input tt-input-key tt-input-invalid')
+
+  const plainField = client.__test.Field({ label: 'plain', children: null })
+  assert.equal(plainField.props.className, 'tt-field')
+  assert.equal(plainField.props.children[0].props.className, 'tt-label')
+  // An ordinary field has no accent dot and no badge.
+  assert.equal(plainField.props.children[0].props.children[0], 'plain')
+  assert.equal(plainField.props.children[0].props.children[1], null)
+})
