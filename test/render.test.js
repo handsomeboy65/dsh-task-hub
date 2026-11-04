@@ -33,7 +33,7 @@ test('client registers a main panel and a sidebar icon that both render', async 
   const React = fakeReact()
   await import('../lib/client.js')
   assert.ok(captured, 'client bundle was not registered')
-  assert.equal(captured.id, 'dsh-tapd-tasks')
+  assert.equal(captured.id, 'dsh-task-hub')
 
   const client = captured.factory((name) => {
     if (name === 'react') return React
@@ -64,7 +64,7 @@ test('client registers a main panel and a sidebar icon that both render', async 
   const main = registered.find((entry) => entry.spec.name === 'main')
   const icon = registered.find((entry) => entry.spec.name === 'sidebar.panellist')
   assert.ok(main, 'main panel not registered')
-  assert.equal(main.spec.key, 'tapd-tasks')
+  assert.equal(main.spec.key, 'task-hub')
   assert.ok(icon, 'sidebar icon not registered')
   assert.equal(icon.spec.order, 25)
 

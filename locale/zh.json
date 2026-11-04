@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "需求任务",
+    "title": "任务中心",
     "description": "在一个面板里读取 TAPD 需求、禅道任务或 GitLab Issue（三选一），手动填写分支名后一键派发 Agent。"
   }
 }

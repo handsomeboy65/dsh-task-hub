@@ -1,16 +1,16 @@
-# dsh-tapd-tasks
+# dsh-task-hub
 
-DSH 的需求任务插件：从 **TAPD / 禅道 / GitLab** 中读取分配给你的需求、任务或 Issue，选一个工作区、手填分支名，一键派发 Agent 开始干活。
+DSH 的任务中心插件：从 **TAPD / 禅道 / GitLab** 中读取分配给你的需求、任务或 Issue，选一个工作区、手填分支名，一键派发 Agent 开始干活。
 
 三个来源是**三选一**：顶部用 tab 切换当前来源，同一时间只列出一个来源的数据，也只有一个来源生效；切换不会把三个来源合并展示。每个来源的地址、凭据、项目等配置分别保存在 `settings.json` 里，来回切换不会丢。
 
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-tapd-tasks
+dsh plugin --profile web add dsh-task-hub
 ```
 
-装完重启 `dsh web`，侧边栏会出现「需求任务」。没走 npm 时，把包名换成 `github:<owner>/<repo>` 同样可以装；桌面端请在应用内的 **设置 → 插件** 里安装。
+装完重启 `dsh web`，侧边栏会出现「任务中心」。没走 npm 时，把包名换成 `github:<owner>/<repo>` 同样可以装；桌面端请在应用内的 **设置 → 插件** 里安装。
 
 ## 分支名手动填写
 
@@ -78,7 +78,7 @@ dsh plugin --profile web add dsh-tapd-tasks
 
 ## 数据与失败模式
 
-- 设置：`~/.dsh/tapd-tasks/settings.json`；派发记录：`~/.dsh/tapd-tasks/state.json`。
+- 设置：`~/.dsh/task-hub/settings.json`；派发记录：`~/.dsh/task-hub/state.json`。
 - 派发记录按 `来源:id`（如 `zentao:task-31`）区分，不同系统的同号条目不会互相覆盖；旧的 TAPD 记录仍按原 id 兼容。
 - 就地派发要求工作区干净，否则报「工作区有未提交改动」。
 - 已存在同名 worktree 但停在别的分支时报冲突，不会强改。

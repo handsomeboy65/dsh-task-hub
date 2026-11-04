@@ -8,7 +8,7 @@ const run = promisify(execFile)
 
 /** A throwaway repository with one commit and one ignored local config. */
 export async function tempRepo() {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-tapd-git-'))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-task-hub-git-'))
   await gitExec(dir, ['init', '-q', '-b', 'main'])
   await gitExec(dir, ['config', 'user.email', 'test@example.com'])
   await gitExec(dir, ['config', 'user.name', 'Test'])

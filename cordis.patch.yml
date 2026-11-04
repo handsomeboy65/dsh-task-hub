@@ -1,4 +1,4 @@
 # dsh bundle patch: inserts the task hub (TAPD / ZenTao / GitLab) into a profile's layer stack.
 - insert:
-    - id: dsh-tapd-tasks
-      name: 'dsh-tapd-tasks'
+    - id: dsh-task-hub
+      name: 'dsh-task-hub'
