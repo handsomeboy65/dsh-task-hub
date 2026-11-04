@@ -32,6 +32,7 @@ test('client registers a main panel and a sidebar icon that both render', async 
 
   const React = fakeReact()
   await import('../lib/client.js')
+  globalThis.__taskHubBundle = captured
   assert.ok(captured, 'client bundle was not registered')
   assert.equal(captured.id, 'dsh-task-hub')
 
@@ -91,16 +92,36 @@ test('client registers a main panel and a sidebar icon that both render', async 
   assert.deepEqual(groups.map((group) => group.name), ['迭代B', '迭代A', ''])
   assert.deepEqual(groups[0].range, ['2026-11-12', '2026-11-18'])
 
-  const rowMarkup = render(
-    StoryRow({
-      t: (key) => key,
-      story: { id: '1168200255001004351', name: '后端-卡航合单', vStatus: '新建(需求设计中)', owner: '王如涛;', url: 'https://x' },
-      onDispatch: () => {},
-      onOpen: () => {},
-    }),
-  )
+  const rowNode = StoryRow({
+    t: (key) => key,
+    story: {
+      id: '1168200255001004351',
+      name: '后端-卡航合单',
+      vStatus: '新建(需求设计中)',
+      owner: '王如涛;',
+      url: 'https://x',
+      app: '德速TMS2.0操作端, 德速TMS',
+    },
+    showApp: true,
+    onDispatch: () => {},
+    onOpen: () => {},
+  })
+  const rowMarkup = render(rowNode)
   assert.match(rowMarkup, /1168200255001004351/)
   assert.match(rowMarkup, /新建\(需求设计中\)/)
+  // 应用 is its own first column, split into one chip per app, before the ID cell.
+  assert.equal(rowNode.props.children[0].props.className, 'tt-sapp')
+  assert.equal(rowNode.props.children[0].props.children.length, 2)
+  assert.ok(
+    rowMarkup.indexOf('德速TMS2.0操作端') < rowMarkup.indexOf('1168200255001004351'),
+    'app column must precede the id column',
+  )
+
+  // Sources without an 应用 custom field (GitLab / 禅道) drop the whole column.
+  const plainRow = StoryRow({ t: (key) => key, story: { id: '9', name: '无应用' }, onDispatch: () => {}, onOpen: () => {} })
+  assert.equal(plainRow.props.className, 'tt-srow tt-noapp')
+  assert.equal(plainRow.props.children.filter(Boolean).length, 5)
+  assert.equal(plainRow.props.children.filter(Boolean)[0].props.className, 'tt-sid')
 
   const existingRow = render(
     StoryRow({
@@ -134,4 +155,69 @@ test('client registers a main panel and a sidebar icon that both render', async 
     }),
   )
   assert.doesNotMatch(carriedRow, /backfill/)
+})
+
+test('opening a session resolves the service per click and explains failures', async () => {
+  let captured
+  globalThis.window = { __ModuleLoader__: { load: (bundle) => { captured = bundle } } }
+  const React = fakeReact()
+  await import('../lib/client.js')
+  const client = (captured ?? globalThis.__taskHubBundle).factory((name) => {
+    if (name === 'react') return React
+    throw new Error(`unexpected module: ${name}`)
+  })
+
+  const registered = []
+  // Mirrors the dynamic Client ctx facade: reading an undeclared service
+  // property throws (the real guard also reports a failure), so a lookup that
+  // starts with `ctx.uiWorkspace` never reaches `ctx.get()`.
+  const makeCtx = (services) => {
+    const target = {
+      effect: (fn) => {
+        fn()
+      },
+      on: () => {},
+      get: (name) => services[name],
+      locale: { register: () => {}, bind: () => (key) => key },
+      slots: {
+        inject: (_slot, register) => register(),
+        register: (spec, component) => {
+          registered.push({ spec, component })
+          return () => {}
+        },
+      },
+    }
+    return new Proxy(target, {
+      get(object, prop) {
+        if (typeof prop === 'string' && !(prop in object)) {
+          throw new Error(`service "${prop}" is not declared by your plugin`)
+        }
+        return Reflect.get(object, prop)
+      },
+    })
+  }
+
+  // No ui-workspace at apply time: the click must report the missing service.
+  registered.length = 0
+  client.apply(makeCtx({}))
+  const missing = registered.find((entry) => entry.spec.name === 'main').spec.inject()
+  assert.deepEqual(await missing.openSession('session-1'), { ok: false, reason: 'service' })
+
+  // A service that registers after apply() must still be picked up per click.
+  const opened = []
+  const archived = []
+  const late = {}
+  registered.length = 0
+  client.apply(makeCtx(late))
+  const lazy = registered.find((entry) => entry.spec.name === 'main').spec.inject()
+  late.workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: ['session-old'] }) } }
+  late.uiWorkspace = {
+    openSession: (id) => opened.push(id),
+    unarchiveSession: async (id) => archived.push(id),
+  }
+  assert.deepEqual(await lazy.openSession('session-new'), { ok: true })
+  assert.deepEqual(await lazy.openSession('session-old'), { ok: true })
+  assert.deepEqual(opened, ['session-new', 'session-old'])
+  assert.deepEqual(archived, ['session-old'])
+  assert.deepEqual(await lazy.openSession(''), { ok: false, reason: 'missing' })
 })

@@ -1,6 +1,6 @@
 {
   "name": "dsh-task-hub",
-  "version": "0.6.1",
+  "version": "0.6.3",
   "type": "module",
   "description": "Task hub: list TAPD requirements, ZenTao tasks and GitLab issues assigned to you, then dispatch a DSH agent on a branch you name.",
   "license": "MIT",
@@ -45,6 +45,7 @@
     "lib/store.js",
     "lib/checkout.js",
     "lib/dispatch.js",
+    "lib/drafts.js",
     "lib/prompt.js",
     "cordis.patch.yml",
     "locale/*.json",

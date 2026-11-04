@@ -71,18 +71,21 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
 
 ## Dispatch flow
 
-1. The panel lists items whose assignee is you, newest first, filterable by Open / Done / All.
+1. The panel lists items whose assignee is you, newest first, filterable by Open / Done / All. For TAPD stories the **App** custom field (e.g. `德速TMS2.0客户端`) gets its own column ahead of the ID; multiple apps stack as separate tags, and the column is dropped entirely when the source has no app field.
 2. Click **Dispatch agent** on an item.
-3. In the dialog, confirm the target workspace (or type a repository path), the **branch name**, whether to use a worktree, the base branch, and an optional extra prompt.
+3. In the dialog, confirm the target workspace (or type a repository path), the **branch name**, whether to use a worktree, the base branch, and optional extra instructions.
+
+   Extra instructions are appended after the generated brief (title, description, attachments, screenshots, working agreement) under `## Extra instructions`; they never replace the story text.
 4. On confirm the plugin runs, in order:
    - `git worktree add -b <branch>` (or `checkout -b` in place);
    - creates (or reuses) a DSH workspace on the worktree/repository and starts a session;
-   - sends the item's title, description, status, priority, due date, source link, plus working agreements such as "do not push, run the tests, summarise in Chinese", as the first task message to the agent;
-   - TAPD items bring their attachments (including parent/root stories) and description screenshots; GitLab downloads `/uploads/...` images and files referenced in the description; ZenTao currently sends text only;
+   - writes the item's title, description, status, priority, app, due date, source link, plus working agreements such as "do not push, run the tests, summarise in Chinese", into the new session's **composer draft**;
+   - TAPD items bring their attachments (including parent/root stories) and description screenshots; GitLab downloads `/uploads/...` images and files referenced in the description; ZenTao currently sends text only. Those attachments are staged as draft attachments on the composer as well;
    - renames the session to `<branch> · <title>` and jumps to it.
-5. The panel shows the branch and session state (running / idle / session gone), refreshing the running state every 8 seconds.
+   **Nothing is sent automatically**: once the session opens, the brief and its attachments sit in the composer, and you send when you are ready.
+5. The panel shows the branch and session state (running / idle / draft / session gone), refreshing the running state every 8 seconds.
 
-Dispatching the same item again returns the existing session instead of creating another branch — provided that session still exists. If that dispatch went out without attachments or screenshots, the row grows a **Resend attachments** button that adds them to the existing session (once).
+Dispatching the same item again returns the existing session instead of creating another branch — provided that session still exists. If that dispatch still has a draft, **Open** puts it back into the composer (an existing draft is never overwritten). Only an explicit **Resend attachments** click actually sends attachments to the session.
 
 ## Data and failure modes
 
@@ -95,7 +98,7 @@ Dispatching the same item again returns the existing session instead of creating
 ## Development
 
 ```bash
-npm test     # 56 cases: pure functions, git flow, dispatch, client rendering, all three adapters
+npm test     # 62 cases: pure functions, git flow, dispatch, client rendering, all three adapters
 ```
 
 After changing the code, an installed bundle needs a DSH restart to load the new JS generation (the first load at install time can go through HMR).

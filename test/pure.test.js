@@ -2,7 +2,19 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { normalizeSettings } from '../lib/store.js'
-import { authHeaders, buildQuery, normalizeStory, normalizeProject, shortStoryId, storyUrl } from '../lib/tapd.js'
+import {
+  appFieldSpec,
+  authHeaders,
+  buildQuery,
+  customFieldSpecs,
+  customFieldValue,
+  normalizeProject,
+  normalizeStory,
+  parseCustomFieldOptions,
+  shortStoryId,
+  storyFieldsFor,
+  storyUrl,
+} from '../lib/tapd.js'
 import { buildTaskPrompt, htmlToText, sessionTitleFor } from '../lib/prompt.js'
 import { worktreePathFor } from '../lib/dispatch.js'
 
@@ -194,4 +206,68 @@ test('worktreePathFor places the checkout beside the repo', () => {
     worktreePathFor('/work/TMS2.0', 'issue_100'),
     '/work/.dsh-worktrees/TMS2.0-issue_100',
   )
+})
+
+test('TAPD custom field settings resolve the 应用 field and its labels', () => {
+  const specs = customFieldSpecs({
+    status: 1,
+    data: [
+      {
+        CustomFieldConfig: {
+          custom_field: 'custom_field_100',
+          name: '应用',
+          type: 'select',
+          options: '{"1":"德速TMS2.0客户端","2":"德速TMS"}',
+          enabled: '1',
+        },
+      },
+      {
+        CustomFieldConfig: {
+          custom_field: 'custom_field_101',
+          name: '停用的字段',
+          type: 'text',
+          options: '',
+          enabled: '0',
+        },
+      },
+      // Non custom_field_* entries come from other feature areas.
+      { CustomFieldConfig: { custom_field: 'iteration_id', name: '迭代', enabled: '1' } },
+    ],
+  })
+  assert.equal(specs.length, 1)
+  const app = appFieldSpec(specs)
+  assert.equal(app.field, 'custom_field_100')
+  assert.deepEqual([...parseCustomFieldOptions('{"1":"德速TMS2.0客户端"}')], [['1', '德速TMS2.0客户端']])
+  assert.equal(storyFieldsFor(specs).includes('custom_field_100'), true)
+
+  // A label column wins; a bare option key is translated through the config.
+  assert.equal(customFieldValue({ custom_field_100_label: '德速TMS' }, app), '德速TMS')
+  assert.equal(customFieldValue({ custom_field_100: '2' }, app), '德速TMS')
+  assert.equal(customFieldValue({ custom_field_100: '1,2' }, app), '德速TMS2.0客户端, 德速TMS')
+  assert.equal(customFieldValue({}, app), '')
+  assert.equal(customFieldValue({ custom_field_100: '9' }, app), '9')
+})
+
+test('normalizeStory carries the application into the story snapshot', () => {
+  const specs = customFieldSpecs({
+    data: [
+      {
+        CustomFieldConfig: {
+          custom_field: 'custom_field_100',
+          name: '所属应用',
+          type: 'select',
+          options: '{"1":"德速TMS2.0客户端"}',
+          enabled: '1',
+        },
+      },
+    ],
+  })
+  const story = normalizeStory(
+    { id: '1168200255001004297', name: '导出附件', workspace_id: '68200255', custom_field_100: '1' },
+    '68200255',
+    specs,
+  )
+  assert.equal(story.app, '德速TMS2.0客户端')
+  // Without specs (endpoint unavailable) the field is simply absent.
+  assert.equal(normalizeStory({ id: '1168200255001004297', name: '导出附件' }, '68200255').app, '')
 })

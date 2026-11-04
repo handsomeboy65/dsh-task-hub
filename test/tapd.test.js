@@ -87,6 +87,20 @@ test('listProjects needs a nick', async () => {
 
 test('fetchMyStories adds Chinese status and iteration names', async () => {
   const { fetchImpl, calls } = scriptedFetch({
+    'stories/custom_fields_settings': {
+      status: 1,
+      data: [
+        {
+          CustomFieldConfig: {
+            custom_field: 'custom_field_100',
+            name: '应用',
+            type: 'select',
+            options: '{"1":"德速TMS2.0客户端","2":"德速TMS"}',
+            enabled: '1',
+          },
+        },
+      ],
+    },
     stories: {
       status: 1,
       data: [
@@ -96,6 +110,7 @@ test('fetchMyStories adds Chinese status and iteration names', async () => {
             name: '后端-卡航合单',
             status: 'planning',
             v_status: '新建(需求设计中)',
+            custom_field_100: '1',
             owner: '王如涛;',
             iteration_id: '1168200255001000146',
             priority_label: '紧急',
@@ -128,6 +143,9 @@ test('fetchMyStories adds Chinese status and iteration names', async () => {
   assert.equal(result.stories.length, 1)
   assert.equal(result.stories[0].vStatus, '新建(需求设计中)')
   assert.equal(result.stories[0].iterationName, '整柜MVP 3')
+  assert.equal(result.stories[0].app, '德速TMS2.0客户端')
+  assert.ok(calls.some((call) => call.path === 'stories/custom_fields_settings'))
+  assert.ok(calls.find((call) => call.path === 'stories').query.fields.includes('custom_field_100'))
   assert.equal(result.iterations[0].name, '整柜MVP 3')
   assert.ok(calls.some((call) => call.path === 'iterations'))
   assert.equal(calls.find((call) => call.path === 'stories').query.with_v_status, '1')

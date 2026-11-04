@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { promises as fs } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
 import { DispatchError, deliverAssets, dispatchStory, git } from '../lib/dispatch.js'
+import { readDraftAsset } from '../lib/drafts.js'
 import { commitAll, gitExec, tempRepo } from './helpers.js'
 
 const STORY = {
@@ -103,6 +105,50 @@ test('worktree dispatch creates the checkout, session, and text-only prompt', as
   assert.deepEqual(record.attachments, [])
 })
 
+test('the dialog text only appends to the generated brief', async () => {
+  const repo = await tempRepo()
+  const sessions = makeSessions()
+
+  await dispatchStory(
+    {
+      story: STORY,
+      settings: { baseBranch: 'main', useWorktree: true },
+      services: { workspaceRegistry: makeRegistry(), sessionController: sessions, fileUploads: makeUploads() },
+      options: {
+        branchName: 'issue_1004297',
+        workspacePath: repo,
+        useWorktree: true,
+        baseBranch: 'main',
+        extraInstructions: '只改导出接口，不要动前端。',
+      },
+    },
+    git,
+  )
+
+  const text = sessions.calls.prompt[0].content[0].text
+  assert.match(text, /TAPD 需求 1004297/)
+  assert.match(text, /## 补充要求/)
+  assert.match(text, /只改导出接口，不要动前端。/)
+  assert.equal(text.trimEnd().endsWith('只改导出接口，不要动前端。'), true)
+})
+
+test('an explicit prompt still replaces the generated brief', async () => {
+  const repo = await tempRepo()
+  const sessions = makeSessions()
+
+  await dispatchStory(
+    {
+      story: STORY,
+      settings: { baseBranch: 'main', useWorktree: true },
+      services: { workspaceRegistry: makeRegistry(), sessionController: sessions, fileUploads: makeUploads() },
+      options: { branchName: 'issue_1004297', workspacePath: repo, useWorktree: true, baseBranch: 'main', prompt: '自定义说明', extraInstructions: '忽略' },
+    },
+    git,
+  )
+
+  assert.equal(sessions.calls.prompt[0].content[0].text, '自定义说明')
+})
+
 test('in-place dispatch keeps untracked files and attaches real bytes', async () => {
   const repo = await tempRepo()
   await fs.writeFile(path.join(repo, 'notes.txt'), 'local notes\n')
@@ -153,6 +199,53 @@ test('in-place dispatch keeps untracked files and attaches real bytes', async ()
   })
   assert.equal(record.images[0].name, 'shot.png')
   assert.equal(record.images[0].bytes, 4)
+})
+
+test('a draft dispatch fills the composer instead of sending', async () => {
+  const repo = await tempRepo()
+  const registry = makeRegistry()
+  const sessions = makeSessions()
+  const uploads = makeUploads()
+  const draftRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'task-hub-draft-'))
+
+  const record = await dispatchStory(
+    {
+      story: STORY,
+      settings: { baseBranch: 'main', useWorktree: true },
+      services: { workspaceRegistry: registry, sessionController: sessions, fileUploads: uploads },
+      loadAttachments: async () => ({
+        files: [{ name: '原型.html', data: new Uint8Array([1, 2, 3, 4]) }],
+        images: [{ name: 'shot.png', mediaType: 'image/png', data: new Uint8Array([137, 80, 78, 71]) }],
+      }),
+      options: {
+        branchName: 'issue_1004297',
+        workspacePath: repo,
+        useWorktree: true,
+        baseBranch: 'main',
+        deliver: 'draft',
+        draftRoot,
+      },
+    },
+    git,
+  )
+
+  // Nothing was sent and nothing was uploaded into the session.
+  assert.equal(sessions.calls.prompt.length, 0)
+  assert.equal(uploads.uploads.length, 0)
+  assert.equal(record.status, 'draft')
+  assert.match(record.draft.text, /TAPD 需求 1004297/)
+  assert.deepEqual(record.draft.files, ['原型.html'])
+  assert.deepEqual(record.draft.images, ['shot.png'])
+  const image = record.draft.assets.find((asset) => asset.kind === 'image')
+  const file = record.draft.assets.find((asset) => asset.kind === 'file')
+  assert.equal(image.mediaType, 'image/png')
+  assert.equal(image.name, 'shot.png')
+  assert.equal(file.name, '原型.html')
+
+  const stored = await readDraftAsset({ sessionId: record.sessionId, index: image.index, root: draftRoot })
+  assert.equal(stored.mediaType, 'image/png')
+  assert.equal(stored.bytes, 4)
+  assert.deepEqual([...stored.data], [137, 80, 78, 71])
 })
 
 test('a busy workspace stops the dispatch before any branch change', async () => {
