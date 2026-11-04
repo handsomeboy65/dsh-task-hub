@@ -59,11 +59,20 @@ test('normalizeSettings accepts the three providers only', () => {
   assert.equal(normalizeSettings({ provider: 'gitlab' }).provider, 'gitlab')
   assert.equal(normalizeSettings({ provider: 'zentao' }).provider, 'zentao')
   assert.equal(normalizeSettings({ provider: 'jira' }).provider, 'tapd')
-  assert.equal(
-    normalizeSettings({ zentao: { scope: 'project', containerId: 3 } }).zentao.containerId,
-    '3',
-  )
   assert.equal(normalizeSettings({ gitlab: { baseUrl: '  ' } }).gitlab.baseUrl, 'https://gitlab.com')
+})
+
+test('normalizeSettings migrates a saved ZenTao selection and cleans up multiple IDs', () => {
+  const legacy = normalizeSettings({ zentao: { scope: 'project', containerId: 3, containerName: '项目 A' } }).zentao
+  assert.equal(legacy.scope, 'project')
+  assert.deepEqual(legacy.containerIds, ['3'])
+  assert.deepEqual(legacy.containerNames, { 3: '项目 A' })
+  const multiple = normalizeSettings({
+    zentao: { ...legacy, containerIds: ['4', 5, '4', 'invalid'], containerNames: { 3: '项目 A', 5: ' 项目 C ' } },
+  }).zentao
+  assert.deepEqual(multiple.containerIds, ['4', '5'])
+  assert.deepEqual(multiple.containerNames, { 5: '项目 C' })
+  assert.deepEqual(normalizeSettings({ zentao: { containerId: 3, containerIds: [] } }).zentao.containerIds, [])
 })
 
 test('authHeaders prefers the personal token over basic credentials', () => {

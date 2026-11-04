@@ -63,19 +63,20 @@ test('requestJson reports a friendly auth error when every mode fails', async ()
   )
 })
 
-test('listProjects maps user_participant_projects and puts projects first', async () => {
+test('listProjects excludes TAPD organizations and keeps project collaboration entries', async () => {
   const { fetchImpl, calls } = scriptedFetch({
     'workspaces/user_participant_projects': {
       status: 1,
       data: [
         { Workspace: { id: '31003251', name: '德速', category: 'organization' } },
         { Workspace: { id: '68200255', name: '默认项目', category: 'project' } },
+        { Workspace: { id: '755', name: '协作项目', category: 'product' } },
       ],
     },
   })
   const result = await listProjects({ credentials: { token: 't' }, nick: 'spring.wang', fetchImpl })
   assert.equal(calls[0].query.nick, 'spring.wang')
-  assert.deepEqual(result.projects.map((project) => project.id), ['68200255', '31003251'])
+  assert.deepEqual(result.projects.map((project) => project.id), ['68200255', '755'])
 })
 
 test('listProjects needs a nick', async () => {

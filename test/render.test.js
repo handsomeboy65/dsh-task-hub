@@ -123,11 +123,12 @@ test('client registers a main panel and a sidebar icon that both render', async 
   assert.equal(plainRow.props.children.filter(Boolean).length, 5)
   assert.equal(plainRow.props.children.filter(Boolean)[0].props.className, 'tt-sid')
 
-  const existingRow = render(
+  const existingTapdRow = render(
     StoryRow({
       t: (key) => key,
       story: {
         id: '1168200255001004331',
+        source: 'tapd',
         name: '前端-SKU管理新增型号字段',
         dispatch: { sessionId: 'session-old', attachments: [], images: [] },
       },
@@ -137,8 +138,8 @@ test('client registers a main panel and a sidebar icon that both render', async 
       backfilling: '',
     }),
   )
-  assert.match(existingRow, /openShort/)
-  assert.match(existingRow, /backfill/)
+  assert.match(existingTapdRow, /openShort/)
+  assert.doesNotMatch(existingTapdRow, /backfill/)
 
   const carriedRow = render(
     StoryRow({
@@ -155,6 +156,18 @@ test('client registers a main panel and a sidebar icon that both render', async 
     }),
   )
   assert.doesNotMatch(carriedRow, /backfill/)
+  const oldZentaoRow = render(StoryRow({
+    t: (key) => key,
+    story: {
+      id: 'story-1',
+      source: 'zentao',
+      name: '旧草稿',
+      dispatch: { sessionId: 'session-old', draft: { text: '需求正文' } },
+    },
+    onOpen: () => {},
+    onBackfill: () => {},
+  }))
+  assert.match(oldZentaoRow, /refreshDraft/)
 })
 
 test('opening a session resolves the service per click and explains failures', async () => {
@@ -220,6 +233,24 @@ test('opening a session resolves the service per click and explains failures', a
   assert.deepEqual(opened, ['session-new', 'session-old'])
   assert.deepEqual(archived, ['session-old'])
   assert.deepEqual(await lazy.openSession(''), { ok: false, reason: 'missing' })
+
+  let blank = true
+  const initialized = []
+  late.sessions = { binding: () => ({ session: { getSnapshot: () => ({ blank }) } }) }
+  late.conversation = {
+    input: {
+      requestDraftInitialization: (_, options) => {
+        initialized.push(options)
+        return 'applied'
+      },
+    },
+  }
+  const record = { sessionId: 'session-new', draft: { text: '需求正文', assets: [] } }
+  assert.equal((await lazy.prepareDraft(record)).applied, 'applied')
+  blank = false
+  assert.equal((await lazy.prepareDraft(record)).alreadyStarted, true)
+  assert.deepEqual(initialized, [{ prompt: '需求正文', whenDraftExists: 'keep' }])
+  assert.deepEqual(opened.slice(-2), ['session-new', 'session-new'])
 })
 
 function expand(node, out = []) {
@@ -233,6 +264,88 @@ function expand(node, out = []) {
   else expand(node.props?.children, out)
   return out
 }
+
+test('dispatching a ZenTao business requirement preserves its type in the API request', async (testContext) => {
+  let captured
+  globalThis.window = { __ModuleLoader__: { load: (bundle) => { captured = bundle } } }
+  await import('../lib/client.js')
+  const story = { source: 'zentao', kind: 'story', requirementType: 'epic', id: 'story-3', shortId: '#3', name: '测试业务需求' }
+  const values = [null, { provider: 'zentao', stories: [story] }, false]
+  let cursor = 0
+  const React = fakeReact()
+  React.useState = (initial) => {
+    const index = cursor++
+    if (!(index in values)) values[index] = typeof initial === 'function' ? initial() : initial
+    return [values[index], (next) => { values[index] = typeof next === 'function' ? next(values[index]) : next }]
+  }
+  let Panel
+  const bundle = captured ?? globalThis.__taskHubBundle
+  bundle.factory(() => React).apply({
+    effect: (fn) => fn(),
+    locale: { register: () => {}, bind: () => (key) => key },
+    slots: { inject: (_, fn) => fn(), register: (spec, component) => { if (spec.name === 'main') Panel = component } },
+  })
+  const nodes = () => {
+    cursor = 0
+    return expand(Panel({ t: (key) => key }))
+  }
+  const button = (label) => nodes().find((node) => node.type === 'button' && node.props.children === label)
+  button('dispatch').props.onClick()
+  const dialog = nodes()
+  assert.equal(dialog.find((node) => node.props?.className === 'tt-chip tt-chip-id').props.children, '#3')
+  dialog.find((node) => node.props?.className === 'tt-input tt-input-key').props.onChange({ target: { value: 'issue_3' } })
+  let request
+  testContext.mock.method(globalThis, 'fetch', async (url, init) => {
+    request = { url, body: JSON.parse(init.body) }
+    return Response.json({ ok: true, value: {} })
+  })
+  button('dispatchConfirm').props.onClick()
+  assert.equal(request.url, '/api/task-hub/dispatch')
+  assert.deepEqual(request.body.story, story)
+})
+
+test('the ZenTao picker supports multiple checkboxes and keeps scope IDs separate', async () => {
+  let captured
+  globalThis.window = { __ModuleLoader__: { load: (bundle) => { captured = bundle } } }
+  await import('../lib/client.js')
+  const { SettingsModal } = (captured ?? globalThis.__taskHubBundle).factory(() => fakeReact()).__test
+  let draft = {
+    provider: 'zentao',
+    zentao: { scope: 'product', containerIdsText: '1', containerNames: { 1: 'TMS1.0' } },
+  }
+  const settings = () => expand(SettingsModal({
+    t: (key) => key,
+    draft,
+    setDraft: (next) => { draft = next },
+    projectCatalog: [],
+    zentaoCatalog: [
+      { kind: 'product', id: '1', name: 'TMS1.0' },
+      { kind: 'project', id: '1', name: 'TMS1.0' },
+      { kind: 'project', id: '2', name: 'TMS2.0' },
+    ],
+  }))
+  const rows = () => settings().filter((node) => node.props?.className === 'tt-proj-row')
+  assert.deepEqual(rows().map((row) => row.props.key), ['product:1'])
+  assert.equal(rows()[0].props.children[0].props.checked, true)
+
+  const scope = settings().find((node) => node.props?.label === 'zentaoScope')
+  scope.props.children.props.onChange({ target: { value: 'project' } })
+  assert.equal(draft.zentao.containerIdsText, '')
+  assert.deepEqual(draft.zentao.containerNames, {})
+  assert.deepEqual(rows().map((row) => row.props.key), ['project:1', 'project:2'])
+  assert.equal(rows()[0].props.children[0].props.checked, false)
+  const checkbox = (index) => rows()[index].props.children[0].props
+  assert.equal(checkbox(0).type, 'checkbox')
+  checkbox(0).onChange()
+  checkbox(1).onChange()
+  assert.equal(draft.zentao.containerIdsText, '1, 2')
+  assert.deepEqual([checkbox(0).checked, checkbox(1).checked], [true, true])
+  checkbox(0).onChange()
+  assert.equal(draft.zentao.containerIdsText, '2')
+  const manual = settings().find((node) => node.props?.label === 'zentaoProjectId')
+  manual.props.children.props.onChange({ target: { value: '1，3, 3' } })
+  assert.deepEqual([checkbox(0).checked, checkbox(1).checked, checkbox(2).checked], [true, false, true])
+})
 
 test('the dispatch dialog treats the branch name as the one field to fill', async () => {
   let captured

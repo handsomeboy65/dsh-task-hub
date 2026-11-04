@@ -45,7 +45,7 @@ Click **Settings** in the top-right corner of the panel, pick a source at the to
 | ZenTao URL | For example `https://zentao.example.com`; `/api.php/v1` is appended automatically |
 | Account / password | Your ZenTao login; the password is written only to DSH credentials |
 | Scope | `Product` reads product stories, `Project` reads tasks under the project's executions |
-| Product / Project | An ID, or pick one after "Fetch list" |
+| Product / Project | Select multiple entries from the list or enter comma-separated IDs |
 
 ZenTao exposes no "assigned to me" endpoint, so the plugin logs in for a token first and then filters by the current account locally.
 
@@ -80,7 +80,7 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
    - `git worktree add -b <branch>` (or `checkout -b` in place);
    - creates (or reuses) a DSH workspace on the worktree/repository and starts a session;
    - writes the item's title, description, status, priority, app, due date, source link, plus working agreements such as "do not push, run the tests, summarise in Chinese", into the new session's **composer draft**;
-   - TAPD items bring their attachments (including parent/root stories) and description screenshots; GitLab downloads `/uploads/...` images and files referenced in the description; ZenTao currently sends text only. Those attachments are staged as draft attachments on the composer as well;
+   - TAPD items bring their attachments (including parent/root stories) and description screenshots; GitLab downloads `/uploads/...` images and files referenced in the description; ZenTao fetches item details, inline ZenTao images, and attachments. Those attachments are staged as draft attachments on the composer as well;
    - renames the session to `<branch> · <title>` and jumps to it.
    **Nothing is sent automatically**: once the session opens, the brief and its attachments sit in the composer, and you send when you are ready.
 5. The panel shows the branch and session state (running / idle / draft / session gone), refreshing the running state every 8 seconds.
