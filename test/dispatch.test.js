@@ -101,7 +101,7 @@ test('worktree dispatch creates the checkout, session, and text-only prompt', as
   assert.equal(await fs.readFile(path.join(record.worktreePath, 'a.txt'), 'utf8'), 'one\n')
   assert.equal(sessions.calls.create[0].workspaceId, record.workspaceId)
   assert.equal(sessions.calls.prompt[0].content.length, 1)
-  assert.match(sessions.calls.prompt[0].content[0].text, /TAPD 需求 1004297/)
+  assert.match(sessions.calls.prompt[0].content[0].text, /TAPD需求 #1004297/)
   assert.deepEqual(record.attachments, [])
 })
 
@@ -126,7 +126,7 @@ test('the dialog text only appends to the generated brief', async () => {
   )
 
   const text = sessions.calls.prompt[0].content[0].text
-  assert.match(text, /TAPD 需求 1004297/)
+  assert.match(text, /TAPD需求 #1004297/)
   assert.match(text, /## 补充要求/)
   assert.match(text, /只改导出接口，不要动前端。/)
   assert.equal(text.trimEnd().endsWith('只改导出接口，不要动前端。'), true)
@@ -188,9 +188,9 @@ test('in-place dispatch keeps untracked files and attaches real bytes', async ()
   assert.ok(record.backupDir)
   const prompt = sessions.calls.prompt[0]
   assert.equal(prompt.content[0].type, 'text')
-  assert.match(prompt.content[0].text, /## 附件/)
+  assert.match(prompt.content[0].text, /- 附件：原型.html/)
   assert.deepEqual(prompt.content[1], { type: 'file', receiptId: 'receipt-原型.html' })
-  assert.match(prompt.content[0].text, /## 图片/)
+  assert.match(prompt.content[0].text, /- 图片：shot.png/)
   assert.deepEqual(prompt.content[2], {
     type: 'image',
     mediaType: 'image/png',
@@ -233,7 +233,7 @@ test('a draft dispatch fills the composer instead of sending', async () => {
   assert.equal(sessions.calls.prompt.length, 0)
   assert.equal(uploads.uploads.length, 0)
   assert.equal(record.status, 'draft')
-  assert.match(record.draft.text, /TAPD 需求 1004297/)
+  assert.match(record.draft.text, /TAPD需求 #1004297/)
   assert.deepEqual(record.draft.files, ['原型.html'])
   assert.deepEqual(record.draft.images, ['shot.png'])
   const image = record.draft.assets.find((asset) => asset.kind === 'image')

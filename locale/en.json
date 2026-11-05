@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Task Hub",
-    "description": "Read TAPD requirements, ZenTao tasks or GitLab issues in one panel (one source at a time), then dispatch a DSH agent on a branch you name."
+    "description": "Read TAPD requirements or ZenTao requirements and tasks in one panel (one source at a time), then dispatch a DSH agent on a branch you name."
   }
 }

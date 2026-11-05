@@ -73,6 +73,9 @@ test('client registers a main panel and a sidebar icon that both render', async 
   assert.match(markup, /title/)
   assert.match(markup, /subtitle/)
   assert.match(markup, /settings/)
+  const sources = expand(main.component({ t: (key) => key, openSession: () => {} }))
+    .find((node) => node.props?.className === 'tt-tabs tt-sources')
+  assert.deepEqual(sources.props.children.map((node) => node.props.children), ['providerTapd', 'providerZentao'])
 
   const iconMarkup = render(icon.component({ size: 20, active: false }))
   assert.match(iconMarkup, /svg/)
@@ -117,7 +120,7 @@ test('client registers a main panel and a sidebar icon that both render', async 
     'app column must precede the id column',
   )
 
-  // Sources without an 应用 custom field (GitLab / 禅道) drop the whole column.
+  // Sources without an 应用 custom field (禅道) drop the whole column.
   const plainRow = StoryRow({ t: (key) => key, story: { id: '9', name: '无应用' }, onDispatch: () => {}, onOpen: () => {} })
   assert.equal(plainRow.props.className, 'tt-srow tt-noapp')
   assert.equal(plainRow.props.children.filter(Boolean).length, 5)
@@ -325,6 +328,8 @@ test('the ZenTao picker supports multiple checkboxes and keeps scope IDs separat
     ],
   }))
   const rows = () => settings().filter((node) => node.props?.className === 'tt-proj-row')
+  const providers = settings().find((node) => node.props?.label === 'provider').props.children
+  assert.deepEqual(providers.props.children.map((node) => node.props.children), ['providerTapd', 'providerZentao'])
   assert.deepEqual(rows().map((row) => row.props.key), ['product:1'])
   assert.equal(rows()[0].props.children[0].props.checked, true)
 

@@ -2,9 +2,9 @@
 
 [简体中文](README.md) · **English**
 
-A task hub for DSH: reads the requirements, tasks and issues assigned to you from **TAPD / ZenTao / GitLab**, then lets you pick a workspace, type a branch name, and dispatch an agent in one click.
+A task hub for DSH: reads the requirements and tasks assigned to you from **TAPD / ZenTao**, then lets you pick a workspace, type a branch name, and dispatch an agent in one click.
 
-The three sources are **mutually exclusive**: the tabs at the top switch the active source, and only one source is listed — and only one takes effect — at a time. Switching never merges them. Each source keeps its own URL, credentials and project settings in `settings.json`, so switching back and forth loses nothing.
+The two sources are **mutually exclusive**: the tabs at the top switch the active source, and only one source is listed — and only one takes effect — at a time. Switching never merges them. Each source keeps its own URL, credentials and project settings in `settings.json`, so switching back and forth loses nothing.
 
 ## Install
 
@@ -49,16 +49,7 @@ Click **Settings** in the top-right corner of the panel, pick a source at the to
 
 ZenTao exposes no "assigned to me" endpoint, so the plugin logs in for a token first and then filters by the current account locally.
 
-### GitLab
-
-| Field | Meaning |
-| --- | --- |
-| GitLab URL | `https://gitlab.com`, JiHu GitLab, or the root URL of a self-hosted instance |
-| Access token | Personal access token with at least `api` / `read_api` |
-| Project path | Optional, `group/project`; leave blank to read every issue assigned to you on the instance |
-| Labels | Optional, comma-separated, passed to GitLab as the `labels` filter |
-
-Credentials are written to DSH `credentials` (they can also come from the environment variables `TAPD_API_USER` / `TAPD_API_TOKEN` / `TAPD_API_PASSWORD` / `ZENTAO_PASSWORD` / `GITLAB_TOKEN`). No secret is ever written into the plugin's data files.
+Credentials are written to DSH `credentials` (they can also come from the environment variables `TAPD_API_USER` / `TAPD_API_TOKEN` / `TAPD_API_PASSWORD` / `ZENTAO_PASSWORD`). No secret is ever written into the plugin's data files.
 
 ### General
 
@@ -79,8 +70,8 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
 4. On confirm the plugin runs, in order:
    - `git worktree add -b <branch>` (or `checkout -b` in place);
    - creates (or reuses) a DSH workspace on the worktree/repository and starts a session;
-   - writes the item's title, description, status, priority, app, due date, source link, plus working agreements such as "do not push, run the tests, summarise in Chinese", into the new session's **composer draft**;
-   - TAPD items bring their attachments (including parent/root stories) and description screenshots; GitLab downloads `/uploads/...` images and files referenced in the description; ZenTao fetches item details, inline ZenTao images, and attachments. Those attachments are staged as draft attachments on the composer as well;
+   - writes the title, source link, parent requirement and associated app (when present), full description, reference assets, working environment (repository, branch, comparison baseline), and execution requirements into the new session's **composer draft**; management fields such as assignee, status, priority, iteration, and dates are omitted. Descriptions are not truncated; missing descriptions prompt the agent to read reference assets and clarify the goal;
+   - TAPD items bring their attachments (including parent/root stories) and description screenshots; ZenTao fetches item details, inline ZenTao images, and attachments. Those attachments are staged as draft attachments on the composer as well;
    - renames the session to `<branch> · <title>` and jumps to it.
    **Nothing is sent automatically**: once the session opens, the brief and its attachments sit in the composer, and you send when you are ready.
 5. The panel shows the branch and session state (running / idle / draft / session gone), refreshing the running state every 8 seconds.
@@ -98,13 +89,13 @@ Dispatching the same item again returns the existing session instead of creating
 ## Development
 
 ```bash
-npm test     # 62 cases: pure functions, git flow, dispatch, client rendering, all three adapters
+npm test     # Pure functions, git flow, dispatch, client rendering, both source adapters
 ```
 
 After changing the code, an installed bundle needs a DSH restart to load the new JS generation (the first load at install time can go through HMR).
 
 ## Limitations
 
-- TAPD covers requirements (stories) only — no tasks, no bugs. ZenTao reads product stories or per-execution tasks, no bugs. GitLab reads issues only, no merge requests.
+- TAPD covers requirements (stories) only — no tasks, no bugs. ZenTao reads product stories or per-execution tasks, no bugs.
 - Nothing is written back to the source system (no status changes, no comments).
 - The plugin does not plan for the agent; after dispatch, the agent in the session plans and implements on its own.

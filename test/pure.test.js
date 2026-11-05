@@ -15,7 +15,7 @@ import {
   storyFieldsFor,
   storyUrl,
 } from '../lib/tapd.js'
-import { buildTaskPrompt, htmlToText, sessionTitleFor } from '../lib/prompt.js'
+import { buildTaskPrompt, htmlToText, refreshTaskPrompt, sessionTitleFor } from '../lib/prompt.js'
 import { worktreePathFor } from '../lib/dispatch.js'
 
 test('normalizeSettings fills defaults and dedupes projects', () => {
@@ -55,11 +55,14 @@ test('normalizeSettings migrates the legacy flat TAPD shape', () => {
   assert.equal(settings.tapd.authMode, 'basic')
 })
 
-test('normalizeSettings accepts the three providers only', () => {
-  assert.equal(normalizeSettings({ provider: 'gitlab' }).provider, 'gitlab')
+test('normalizeSettings accepts TAPD and ZenTao only', () => {
+  assert.equal(normalizeSettings({ provider: 'tapd' }).provider, 'tapd')
   assert.equal(normalizeSettings({ provider: 'zentao' }).provider, 'zentao')
   assert.equal(normalizeSettings({ provider: 'jira' }).provider, 'tapd')
-  assert.equal(normalizeSettings({ gitlab: { baseUrl: '  ' } }).gitlab.baseUrl, 'https://gitlab.com')
+  const legacy = normalizeSettings({ provider: 'gitlab', gitlab: { baseUrl: 'https://old.example.com' }, tapd: { projects: ['42'] } })
+  assert.equal(legacy.provider, 'tapd')
+  assert.equal('gitlab' in legacy, false)
+  assert.deepEqual(legacy.tapd.projects, ['42'])
 })
 
 test('normalizeSettings migrates a saved ZenTao selection and cleans up multiple IDs', () => {
@@ -168,18 +171,26 @@ test('htmlToText strips markup, decodes entities and keeps bullets', () => {
   assert.doesNotMatch(text, /<[a-z]/i)
 })
 
-test('buildTaskPrompt carries story fields, branch and guardrails', () => {
+test('buildTaskPrompt keeps execution context and omits management fields', () => {
   const prompt = buildTaskPrompt(
-    { id: '101', name: '导出报表', description: '<b>需要</b> CSV', status: 'planning', owner: '张三', url: 'https://x' },
+    {
+      id: '101', name: '导出报表', description: '<b>需要</b> CSV', status: 'planning', owner: '张三', url: 'https://x',
+      priorityLabel: 'P3', iterationName: '迭代一', begin: '2026-11-04', due: '2026-11-05', app: '客户端',
+    },
     { branch: 'issue_101', baseBranch: 'new_test', worktreePath: '/tmp/wt' },
   )
-  assert.match(prompt, /需求 101：导出报表/)
+  assert.match(prompt, /^# TAPD需求 #101：导出报表/)
+  assert.match(prompt, /需求地址：https:\/\/x/)
+  assert.match(prompt, /关联应用：客户端/)
   assert.match(prompt, /\/tmp\/wt/)
   assert.match(prompt, /issue_101/)
   assert.match(prompt, /new_test/)
   assert.match(prompt, /需要 CSV/)
   assert.match(prompt, /不要执行 push/)
   assert.doesNotMatch(prompt, /<b>/)
+  assert.doesNotMatch(prompt, /处理人|状态|优先级|迭代|开始：|截止：|张三|planning|2026-11-04/)
+  assert.ok(prompt.indexOf('## 需求内容') < prompt.indexOf('## 工作环境'))
+  assert.ok(prompt.indexOf('## 工作环境') < prompt.indexOf('## 执行要求'))
 })
 
 test('buildTaskPrompt names both the parent requirement and the child story', () => {
@@ -194,14 +205,56 @@ test('buildTaskPrompt names both the parent requirement and the child story', ()
     },
     { branch: 'issue_1004297' },
   )
-  assert.match(prompt, /需求 1004297（客户端新增批量导出附件功能）下的子需求 1004334/)
+  assert.match(prompt, /^# TAPD需求 #1004334：后端-客户端新增批量导出附件功能/)
   assert.match(prompt, /父需求：1004297/)
+  assert.match(prompt, /父需求：1004297 客户端新增批量导出附件功能/)
   assert.match(prompt, /issue_1004297/)
 })
 
 test('buildTaskPrompt falls back when the description is empty', () => {
   const prompt = buildTaskPrompt({ id: '7', name: '空需求', description: '' }, { branch: 'issue_7' })
   assert.match(prompt, /（TAPD 上没有填写描述/)
+  assert.match(prompt, /提出需要澄清的问题/)
+})
+
+test('buildTaskPrompt preserves long descriptions and only lists supplied assets', () => {
+  const description = '需求原文'.repeat(2000) + '验收条件：完成导出'
+  const prompt = buildTaskPrompt(
+    { source: 'zentao', requirementType: 'requirement', id: '4', name: '测试用户需求', description },
+    { repoRoot: '/work/repo', attachments: [{ name: '入仓单.xlsx' }, null], images: [{ name: '截图.jpg' }] },
+  )
+  assert.match(prompt, /^# 禅道用户需求 #4：测试用户需求/)
+  assert.ok(prompt.includes(description))
+  assert.match(prompt, /- 附件：入仓单.xlsx/)
+  assert.match(prompt, /- 图片：截图.jpg/)
+  assert.match(prompt, /- 仓库：`\/work\/repo`/)
+  assert.doesNotMatch(prompt, /已随本条消息发送|工作分支：|对比基线：/)
+  assert.doesNotMatch(buildTaskPrompt({ id: '1' }), /## 参考资料|工作分支：|对比基线：/)
+})
+
+test('refreshTaskPrompt updates new and legacy drafts repeatedly while preserving surrounding edits', () => {
+  const suffix = '\n\n## 补充要求\n\n只修改后端'
+  const current = buildTaskPrompt({ id: '1', name: '原始标题', description: '旧正文' }, { branch: 'original' }) + suffix
+  const legacy = '自定义开头\n\n## 需求描述\n旧正文\n\n## 附件\n- old.pdf' +
+    '\n\n## 工作方式\n1. 先读需求、再看仓库现状（相关模块、已有约定、测试）' + suffix
+  for (const draft of [current, legacy]) {
+    const refreshed = refreshTaskPrompt(draft, { description: '最新正文' }, { attachments: [{ name: 'new.pdf' }] })
+    assert.match(refreshed, /最新正文/)
+    assert.match(refreshed, /- 附件：new.pdf/)
+    assert.doesNotMatch(refreshed, /旧正文|old.pdf/)
+    assert.ok(refreshed.endsWith(suffix))
+    assert.equal(refreshTaskPrompt(refreshed, { description: '最新正文' }, { attachments: [{ name: 'new.pdf' }] }), refreshed)
+    const boundary = draft.includes('## 工作环境') ? '\n\n## 工作环境' : '\n\n## 工作方式'
+    assert.equal(refreshed.slice(refreshed.indexOf(boundary)), draft.slice(draft.indexOf(boundary)))
+    assert.equal(refreshed.split('\n\n## 需求内容')[0], draft.split(/\n\n## 需求(?:内容|描述)/)[0])
+  }
+})
+
+test('refreshTaskPrompt preserves a custom draft when generated boundaries are absent', () => {
+  const custom = '用户自行编写的要求\n\n## 补充要求\n仅分析'
+  const refreshed = refreshTaskPrompt(custom, { description: '最新正文' })
+  assert.ok(refreshed.startsWith(custom + '\n\n'))
+  assert.match(refreshed, /最新正文/)
 })
 
 test('sessionTitleFor prefixes the branch and caps the length', () => {
