@@ -23,7 +23,8 @@
     "agent"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.1-0 <0.3.0-0"
   },
   "publishConfig": {
     "access": "public"

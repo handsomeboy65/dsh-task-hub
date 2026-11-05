@@ -2,23 +2,19 @@
 
 [简体中文](README.md) · **English**
 
-A task hub for DSH: reads the requirements and tasks assigned to you from **TAPD / ZenTao**, then lets you pick a workspace, type a branch name, and dispatch an agent in one click.
+A task hub for DSH: reads the requirements and tasks assigned to you from **TAPD / ZenTao**, then lets you pick a workspace, type a branch name, and dispatch the selected task to an agent.
 
 The two sources are **mutually exclusive**: the tabs at the top switch the active source, and only one source is listed — and only one takes effect — at a time. Switching never merges them. Each source keeps its own URL, credentials and project settings in `settings.json`, so switching back and forth loses nothing.
 
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-task-hub
-```
-
-Before the package is on npm, install it from GitHub instead:
-
-```sh
 dsh plugin --profile web add github:handsomeboy65/dsh-task-hub
 ```
 
 Restart `dsh web` afterwards — "Task Hub" appears in the sidebar. On desktop, install it from **Settings → Plugins** inside the app.
+
+Requires DSH 0.2.1 or newer. Once the package is on npm, `dsh plugin --profile web add dsh-task-hub` does the same thing.
 
 ## The branch name is typed by hand
 

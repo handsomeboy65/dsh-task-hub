@@ -2,23 +2,19 @@
 
 [English](README.en.md) · **简体中文**
 
-DSH 的任务中心插件：从 **TAPD / 禅道** 中读取分配给你的需求或任务，选一个工作区、手填分支名，一键派发 Agent 开始干活。
+DSH 的任务中心插件：从 **TAPD / 禅道** 中读取分配给你的需求或任务，选一个工作区、手填分支名，把选中的任务派发给 Agent 开始干活。
 
 两个来源是**二选一**：顶部用 tab 切换当前来源，同一时间只列出一个来源的数据，也只有一个来源生效；切换不会把两个来源合并展示。每个来源的地址、凭据、项目等配置分别保存在 `settings.json` 里，来回切换不会丢。
 
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-task-hub
-```
-
-装完重启 `dsh web`，侧边栏会出现「任务中心」。npm 上还没发布时可以改从仓库安装：
-
-```sh
 dsh plugin --profile web add github:handsomeboy65/dsh-task-hub
 ```
 
-桌面端请在应用内的 **设置 → 插件** 里安装。
+装完重启 `dsh web`，侧边栏会出现「任务中心」。桌面端请在应用内的 **设置 → 插件** 里安装。
+
+需要 DSH 0.2.1 或更新版本。包发布到 npm 之后，`dsh plugin --profile web add dsh-task-hub` 是等价写法。
 
 ## 分支名手动填写
 
