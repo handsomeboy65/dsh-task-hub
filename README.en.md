@@ -6,6 +6,12 @@ A task hub for DSH: reads the requirements and tasks assigned to you from **TAPD
 
 Use the TAPD, ZenTao, and **All sources** tabs. Active ZenTao requirements are grouped by development stage. The **All** filter shows empty columns for TAPD project statuses and for the ZenTao stages or statuses of the selected scope. Use **Search** in the top right to find tasks by ID, parent ID, or title. The panel refreshes tracker data every 90 seconds while visible.
 
+## 33-second demo
+
+[![Animated Task Hub preview: TAPD and ZenTao boards, quick search, and agent dispatch](deliverables/dsh-task-hub-v3-preview.webp)](deliverables/dsh-task-hub-apple-v3.mp4)
+
+[Watch the full video (1080p MP4)](deliverables/dsh-task-hub-apple-v3.mp4) · The demo uses sample tasks.
+
 ## Install
 
 ```sh
