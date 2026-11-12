@@ -1,6 +1,6 @@
 {
   "name": "dsh-task-hub",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "type": "module",
   "description": "Task hub: list TAPD requirements and ZenTao tasks assigned to you, then dispatch a DSH agent on a branch you name.",
   "license": "MIT",
