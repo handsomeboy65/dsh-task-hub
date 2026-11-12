@@ -6,6 +6,12 @@ DSH 的任务中心插件：从 **TAPD / 禅道** 中读取分配给你的需求
 
 顶部可切换 TAPD、禅道和「全部来源」。禅道激活需求按研发阶段分列。选择「全部」时，TAPD 的项目状态和禅道对应范围的阶段或状态都会显示空列。右上角点「搜索」可按任务号、父需求号或标题查找。任务中心打开时每 90 秒刷新一次来源状态，也可手动刷新或按项目、应用筛选。
 
+## 33 秒演示
+
+[![任务中心动态演示：TAPD、禅道看板、快捷搜索与 Agent 派发](deliverables/dsh-task-hub-v3-preview.webp)](deliverables/dsh-task-hub-apple-v3.mp4)
+
+[播放完整视频（1080p MP4）](deliverables/dsh-task-hub-apple-v3.mp4) · 演示使用示例任务。
+
 ## 安装
 
 ```sh
