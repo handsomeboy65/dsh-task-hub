@@ -144,3 +144,17 @@ test('rollback returns to the original branch', async () => {
   assert.equal(result.ok, true)
   assert.equal(await gitExec(repo, ['branch', '--show-current']), 'main\n')
 })
+
+test('an invalid base leaves existing user stash and clean worktree untouched', async () => {
+  const repo = await tempRepo()
+  await fs.writeFile(path.join(repo, 'a.txt'), 'from an earlier task\n')
+  await gitExec(repo, ['stash', 'push', '-m', 'existing stash'])
+  const stash = await gitExec(repo, ['rev-parse', 'refs/stash'])
+  await assert.rejects(
+    () => switchBranch({ repoRoot: repo, branch: 'review', create: true, startPoint: 'missing-base', exec: git }),
+    (error) => error.code === 'dispatch/bad-base',
+  )
+  assert.equal(await gitExec(repo, ['rev-parse', 'refs/stash']), stash)
+  assert.equal(await gitExec(repo, ['status', '--porcelain']), '')
+  assert.equal(await gitExec(repo, ['branch', '--show-current']), 'main\n')
+})

@@ -267,3 +267,57 @@ test('fetchStoryImages fails loudly when no download link comes back', async () 
     (error) => error.code === 'tapd/image-failed',
   )
 })
+
+test('legacy query credentials are used only when the profile allows them', async () => {
+  const calls = []
+  const fetchImpl = async (url) => {
+    const hasQueryPassword = new URL(url).searchParams.has('api_password')
+    calls.push(hasQueryPassword)
+    return hasQueryPassword ? Response.json({ status: 1, data: [] }) : new Response('', { status: 401 })
+  }
+  const basic = { apiUser: 'user', apiPassword: 'fake-password' }
+  await assert.rejects(
+    requestJson('stories', {}, { ...basic, allowQueryAuth: false }, { fetchImpl }),
+    { code: 'tapd/auth-failed' },
+  )
+  assert.deepEqual(calls, [false])
+  await requestJson('stories', {}, { ...basic, allowQueryAuth: true }, { fetchImpl })
+  assert.deepEqual(calls, [false, false, true])
+})
+
+test('TAPD adds project status choices and fills missing labels without changing story scope', async () => {
+  let statusRequests = 0
+  const fetchImpl = async (url) => {
+    const { pathname, searchParams } = new URL(url)
+    let data = []
+    if (pathname === '/stories/get_fields_info') {
+      statusRequests += 1
+      data = { status: { options: { status_16: '测试中(Testing)', status_18: '待发布(测试通过)' } } }
+    } else if (pathname === '/stories') {
+      assert.equal(searchParams.get('owner'), '当前处理人')
+      data = [{ Story: { id: '1', name: '任务', status: 'status_16' } }]
+    }
+    return Response.json({ status: 1, data })
+  }
+  const options = {
+    credentials: { token: 'fake-token' },
+    projects: ['606001'],
+    owner: '当前处理人',
+    includeStatusOptions: true,
+    fetchImpl,
+  }
+  const result = await fetchMyStories(options)
+  assert.equal(result.stories[0].vStatus, '测试中(Testing)')
+  assert.deepEqual(result.projects[0].statuses, ['测试中(Testing)', '待发布(测试通过)'])
+  await fetchMyStories(options)
+  assert.equal(statusRequests, 1)
+  const restricted = await fetchMyStories({
+    ...options,
+    projects: ['606002'],
+    fetchImpl: (url) => new URL(url).pathname === '/stories/get_fields_info'
+      ? new Response('', { status: 403 })
+      : fetchImpl(url),
+  })
+  assert.equal(restricted.stories.length, 1)
+  assert.deepEqual(restricted.projects[0].statuses, [])
+})

@@ -4,7 +4,7 @@
 
 A task hub for DSH: reads the requirements and tasks assigned to you from **TAPD / ZenTao**, then lets you pick a workspace, type a branch name, and dispatch the selected task to an agent.
 
-The two sources are **mutually exclusive**: the tabs at the top switch the active source, and only one source is listed — and only one takes effect — at a time. Switching never merges them. Each source keeps its own URL, credentials and project settings in `settings.json`, so switching back and forth loses nothing.
+Use the TAPD, ZenTao, and **All sources** tabs. Active ZenTao requirements are grouped by development stage. The **All** filter shows empty columns for TAPD project statuses and for the ZenTao stages or statuses of the selected scope. Use **Search** in the top right to find tasks by ID, parent ID, or title. The panel refreshes tracker data every 90 seconds while visible.
 
 ## Install
 
@@ -60,27 +60,27 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
 
 1. The panel lists items whose assignee is you, newest first, filterable by Open / Done / All. For TAPD stories the **App** custom field (e.g. `德速TMS2.0客户端`) gets its own column ahead of the ID; multiple apps stack as separate tags, and the column is dropped entirely when the source has no app field.
 2. Click **Dispatch agent** on an item.
-3. In the dialog, confirm the target workspace (or type a repository path), the **branch name**, whether to use a worktree, the base branch, and optional extra instructions.
+3. For tasks with a linked session, choose **Continue conversation** or **New conversation**. Continuing opens a linked session in its current workspace and prepares the latest task draft. Existing composer content is preserved. A new conversation reuses the task branch. If the original workspace is on another branch, the plugin uses an existing worktree for the task branch or prepares one. For the first dispatch, select the workspace, enter the branch name, and choose the worktree and base branch.
 
    Extra instructions are appended after the generated brief (title, description, attachments, screenshots, working agreement) under `## Extra instructions`; they never replace the story text.
-4. On confirm the plugin runs, in order:
+4. After confirming the first dispatch, the plugin runs these steps in order.
    - `git worktree add -b <branch>` (or `checkout -b` in place);
    - creates (or reuses) a DSH workspace on the worktree/repository and starts a session;
    - writes the title, source link, parent requirement and associated app (when present), full description, reference assets, working environment (repository, branch, comparison baseline), and execution requirements into the new session's **composer draft**; management fields such as assignee, status, priority, iteration, and dates are omitted. Descriptions are not truncated; missing descriptions prompt the agent to read reference assets and clarify the goal;
    - TAPD items bring their attachments (including parent/root stories) and description screenshots; ZenTao fetches item details, inline ZenTao images, and attachments. Those attachments are staged as draft attachments on the composer as well;
    - renames the session to `<branch> · <title>` and jumps to it.
    **Nothing is sent automatically**: once the session opens, the brief and its attachments sit in the composer, and you send when you are ready.
-5. The panel shows the branch and session state (running / idle / draft / session gone), refreshing the running state every 8 seconds.
+5. The panel refreshes the branch and session status once a minute. Temporary lookup failures show **Status unavailable**, and an incomplete draft can be retried in its original session.
 
-Dispatching the same item again returns the existing session instead of creating another branch — provided that session still exists. If that dispatch still has a draft, **Open** puts it back into the composer (an existing draft is never overwritten). Only an explicit **Resend attachments** click actually sends attachments to the session.
+**Open** returns to the latest linked conversation and restores an unsent draft. After creating a new conversation, the previous conversation remains available under **Continue conversation**.
 
 ## Data and failure modes
 
 - Settings: `~/.dsh/task-hub/settings.json`; dispatch records: `~/.dsh/task-hub/state.json`.
 - Records are keyed by `source:id` (e.g. `zentao:task-31`), so items from different systems that share an ID never overwrite each other. Older TAPD records keep working under their original IDs.
-- In-place dispatch requires a clean workspace; otherwise it reports "workspace has uncommitted changes".
+- In-place dispatch uses Smart Checkout by default. A clean workspace is required when Smart Checkout is disabled.
 - An existing worktree of the same name sitting on another branch is reported as a conflict — it is never force-changed.
-- A failing project/product query does not break the rest of the list; the error is surfaced in the panel.
+- All sources can show results from one tracker when the other tracker fails. The panel also reports individual TAPD project failures.
 
 ## Development
 

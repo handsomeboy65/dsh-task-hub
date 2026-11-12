@@ -75,7 +75,7 @@ test('client registers a main panel and a sidebar icon that both render', async 
   assert.match(markup, /settings/)
   const sources = expand(main.component({ t: (key) => key, openSession: () => {} }))
     .find((node) => node.props?.className === 'tt-tabs tt-sources')
-  assert.deepEqual(sources.props.children.map((node) => node.props.children), ['providerTapd', 'providerZentao'])
+  assert.deepEqual(sources.props.children.map((node) => node.props.children), ['providerTapd', 'providerZentao', 'providerAll'])
 
   const iconMarkup = render(icon.component({ size: 20, active: false }))
   assert.match(iconMarkup, /svg/)
@@ -253,6 +253,8 @@ test('opening a session resolves the service per click and explains failures', a
   blank = false
   assert.equal((await lazy.prepareDraft(record)).alreadyStarted, true)
   assert.deepEqual(initialized, [{ prompt: '需求正文', whenDraftExists: 'keep' }])
+  assert.equal((await lazy.prepareDraft({ ...record, continuation: true })).applied, 'applied')
+  assert.deepEqual(initialized.at(-1), { prompt: '需求正文', whenDraftExists: 'keep' })
   assert.deepEqual(opened.slice(-2), ['session-new', 'session-new'])
 })
 
@@ -273,7 +275,11 @@ test('dispatching a ZenTao business requirement preserves its type in the API re
   globalThis.window = { __ModuleLoader__: { load: (bundle) => { captured = bundle } } }
   await import('../lib/client.js')
   const story = { source: 'zentao', kind: 'story', requirementType: 'epic', id: 'story-3', shortId: '#3', name: '测试业务需求' }
-  const values = [null, { provider: 'zentao', stories: [story] }, false]
+  const values = [null, {
+    provider: 'zentao',
+    stories: [story],
+    statusOptions: { zentao: ['研发中', '测试中', '已发布'] },
+  }, false]
   let cursor = 0
   const React = fakeReact()
   React.useState = (initial) => {
@@ -293,6 +299,24 @@ test('dispatching a ZenTao business requirement preserves its type in the API re
     return expand(Panel({ t: (key) => key }))
   }
   const button = (label) => nodes().find((node) => node.type === 'button' && node.props.children === label)
+  assert.ok(nodes().some((node) => node.props?.className === 'tt-board'))
+  assert.equal(button('listView'), undefined)
+  assert.equal(button('boardView'), undefined)
+  const releaseColumn = () => nodes().find((node) => node.type === 'h2' && node.props.children[0] === '已发布')
+  assert.equal(releaseColumn(), undefined)
+  const allTab = nodes().find((node) => node.type === 'button' && node.props.children?.[0] === 'filterAll')
+  allTab.props.onClick()
+  assert.equal(releaseColumn().props.children[1].props.children, 0)
+  const searchControl = () => nodes().find((node) => node.props?.className === 'tt-search-control')
+  const searchInput = () => expand(searchControl()).find((node) => node.type === 'input')
+  assert.equal(searchInput(), undefined)
+  expand(searchControl()).find((node) => node.type === 'button').props.onClick()
+  assert.equal(searchInput().props.autoFocus, true)
+  searchInput().props.onChange({ target: { value: '没有匹配的任务' } })
+  assert.equal(button('dispatch'), undefined)
+  assert.equal(releaseColumn(), undefined)
+  searchInput().props.onKeyDown({ key: 'Escape', preventDefault() {} })
+  assert.equal(searchInput(), undefined)
   button('dispatch').props.onClick()
   const dialog = nodes()
   assert.equal(dialog.find((node) => node.props?.className === 'tt-chip tt-chip-id').props.children, '#3')
@@ -427,4 +451,62 @@ test('the dispatch dialog treats the branch name as the one field to fill', asyn
   // An ordinary field has no accent dot and no badge.
   assert.equal(plainField.props.children[0].props.children[0], 'plain')
   assert.equal(plainField.props.children[0].props.children[1], null)
+})
+
+test('the board groups source status labels and searches parent IDs and application', async () => {
+  const { filterStories, groupByStatus } = globalThis.__taskHubBundle.factory(() => fakeReact()).__test
+  const stories = [
+    { id: '1', source: 'tapd', projectId: '12', name: '订单导出', rootShortId: '100427', vStatus: '已上线', app: '操作端、客户端' },
+    { id: '2', source: 'zentao', projectId: '12', name: '合单同步', vStatus: '进行中' },
+  ]
+  const zentaoStory = { source: 'zentao', kind: 'story', status: 'active', vStatus: '进行中' }
+  const developing = { ...zentaoStory, id: '3', stageLabel: '研发中' }
+  const testing = { ...zentaoStory, id: '4', stageLabel: '测试中' }
+  const closed = { ...developing, id: '5', status: 'closed', vStatus: '已关闭', completed: true }
+  const groups = groupByStatus([...stories, developing, testing, closed], '未知', ['已上线', '待发布(测试通过)'])
+  assert.deepEqual(groups.map(({ name, stories }) => [name, stories.length]), [
+    ['已上线', 1], ['进行中', 1], ['研发中', 1], ['测试中', 1], ['已关闭', 1], ['待发布(测试通过)', 0],
+  ])
+  assert.deepEqual(filterStories(stories, '#100427 导出', 'tapd:12', '客户端'), [stories[0]])
+  assert.deepEqual(filterStories(stories, '', 'zentao:12', ''), [stories[1]])
+})
+
+test('continuing a linked conversation hides checkout fields and keeps historical conversations selectable', () => {
+  const { DispatchModal } = globalThis.__taskHubBundle.factory(() => fakeReact()).__test
+  const nodes = expand(DispatchModal({
+    t: (key) => key,
+    story: {
+      id: 'story-3', name: '业务需求',
+      dispatch: {
+        sessionId: 'recent', branch: 'feature/recent',
+        previousSessions: [{ sessionId: 'older', branch: 'feature/older' }],
+      },
+    },
+    form: { conversation: 'existing', sessionId: 'older', prompt: '' },
+  }))
+  assert.ok(nodes.some((node) => node.type === 'button' && node.props.children === 'newConversation'))
+  assert.ok(nodes.some((node) => node.type === 'button' && node.props.children === 'prepareExisting'))
+  assert.equal(nodes.filter((node) => node.type === 'option').map((node) => node.props.value).join(','), 'recent,older')
+  assert.ok(!nodes.some((node) => node.props?.className === 'tt-input tt-input-key'))
+})
+
+test('a new conversation on a dispatched task shows the saved branch and skips checkout fields', () => {
+  const { DispatchModal } = globalThis.__taskHubBundle.factory(() => fakeReact()).__test
+  const modal = DispatchModal({
+    t: (key) => key,
+    story: {
+      id: 'story-3', name: '业务需求',
+      dispatch: { sessionId: 'recent', branch: 'feature/original', worktreePath: '/tmp/worktree' },
+    },
+    form: { conversation: 'new', prompt: '' },
+  })
+  const nodes = expand(modal)
+  assert.ok(nodes.some((node) => node.type === 'button' && node.props.children === 'prepareNew'))
+  assert.ok(nodes.some((node) => node.type === 'code' && node.props.children === 'feature/original'))
+  assert.ok(nodes.some((node) => node.props?.className === 'tt-modal tt-modal-compact'))
+  const checkout = nodes.find((node) => node.props?.className === 'tt-dispatch-checkout')
+  assert.equal(checkout.props.title, '/tmp/worktree')
+  const extra = nodes.find((node) => node.type === 'details')
+  assert.equal(extra.props.open, undefined)
+  assert.ok(!nodes.some((node) => node.type === 'input' || node.type === 'select'))
 })

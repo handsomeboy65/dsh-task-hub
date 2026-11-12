@@ -108,8 +108,8 @@ test('zentao keeps gateway Basic Auth separate from login and API tokens', async
 
 test('ZenTao combines development, user and business requirements with type-aware detail links', async () => {
   const rows = {
-    story: { id: 1, title: '研发需求', type: 'story', assignedTo: 'admin', status: 'active' },
-    requirement: { id: 4, title: '用户需求', type: 'requirement', assignedTo: 'admin', status: 'active' },
+    story: { id: 1, title: '研发需求', type: 'story', assignedTo: 'admin', status: 'active', stage: 'developing' },
+    requirement: { id: 4, title: '用户需求', type: 'requirement', assignedTo: 'admin', status: 'active', stage: 'testing' },
     epic: { id: 5, title: '业务需求', type: 'epic', assignedTo: 'admin', status: 'active' },
   }
   const queries = []
@@ -126,7 +126,7 @@ test('ZenTao combines development, user and business requirements with type-awar
         queries.push(type)
         return json({ stories: type === 'epic' ? [rows.epic, rows.requirement] : [rows[type]] })
       }
-      if (pathname.endsWith('/stories/4') && type === 'requirement') return json({ id: 4, spec: '用户需求正文' })
+      if (pathname.endsWith('/stories/4') && type === 'requirement') return json({ id: 4, spec: '用户需求正文', stage: 'tested' })
       if (pathname.endsWith('/stories/5') && type === 'epic') return json({ id: 5, spec: '业务需求正文' })
       throw new Error(`unexpected ${url}`)
     },
@@ -136,6 +136,11 @@ test('ZenTao combines development, user and business requirements with type-awar
   assert.equal(result.rawCount, 3)
   assert.deepEqual(result.stories.map(({ id, requirementType }) => [id, requirementType]), [
     ['story-1', 'story'], ['story-4', 'requirement'], ['story-5', 'epic'],
+  ])
+  assert.deepEqual(result.stories.map(({ stage, stageLabel, status, completed }) => [stage, stageLabel, status, completed]), [
+    ['developing', '研发中', 'active', false],
+    ['testing', '测试中', 'active', false],
+    ['', '', 'active', false],
   ])
   for (const story of result.stories.slice(1)) {
     assert.equal(story.url, `https://types.example.com/zentao/story-view-${story.remoteId}-0-0-${story.requirementType}.html`)
@@ -147,6 +152,7 @@ test('ZenTao combines development, user and business requirements with type-awar
       story,
     })
     assert.equal(detailed.description, `${story.name}正文`)
+    assert.equal(detailed.stageLabel, story.requirementType === 'requirement' ? '测试完毕' : '')
   }
 })
 
@@ -170,10 +176,12 @@ test('zentao project scope walks executions and tasks', async () => {
     baseUrl: 'https://z.example.com/api.php/v1',
     credentials: { account: 'spring', password: 'pw' },
     scope: 'project',
+    includeStatusOptions: true,
     containerId: '7',
     containerName: '项目 X',
     fetchImpl,
   })
+  assert.deepEqual(result.statusOptions, ['未开始', '进行中', '已完成', '已关闭', '已取消', '已暂停'])
   assert.equal(result.stories.length, 1)
   assert.equal(result.stories[0].id, 'task-31')
   assert.equal(result.stories[0].iterationName, 'Sprint 1')
