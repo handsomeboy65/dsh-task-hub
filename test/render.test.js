@@ -258,6 +258,118 @@ test('opening a session resolves the service per click and explains failures', a
   assert.deepEqual(opened.slice(-2), ['session-new', 'session-new'])
 })
 
+test('opening a draft restores its screenshots instead of dropping them', async () => {
+  let captured
+  globalThis.window = { __ModuleLoader__: { load: (bundle) => { captured = bundle } } }
+  const React = fakeReact()
+  await import('../lib/client.js')
+  const client = (captured ?? globalThis.__taskHubBundle).factory((name) => {
+    if (name === 'react') return React
+    throw new Error(`unexpected module: ${name}`)
+  })
+
+  const registered = []
+  const services = {}
+  const target = {
+    effect: (fn) => {
+      fn()
+    },
+    on: () => {},
+    get: (name) => services[name],
+    locale: { register: () => {}, bind: () => (key) => key },
+    slots: {
+      inject: (_slot, register) => register(),
+      register: (spec) => {
+        registered.push({ spec })
+        return () => {}
+      },
+    },
+  }
+  client.apply(new Proxy(target, {
+    get(object, prop) {
+      if (typeof prop === 'string' && !(prop in object)) throw new Error(`service "${prop}" is not declared by your plugin`)
+      return Reflect.get(object, prop)
+    },
+  }))
+  const api = registered.find((entry) => entry.spec.name === 'main').spec.inject()
+
+  const assets = [
+    { index: 0, name: 'tapd_0.png', mediaType: 'image/png' },
+    { index: 1, name: 'tapd_1.png', mediaType: 'image/png' },
+  ]
+  const composer = { draft: '', attachmentIds: [], draftRev: 1 }
+  let accept = true
+  const shell = {
+    get snapshot() {
+      return composer
+    },
+    addAttachments: (ids) => {
+      if (!accept) return false
+      composer.attachmentIds.push(...ids)
+      return true
+    },
+  }
+  const drafted = []
+  const binding = { session: { getSnapshot: () => ({ blank: true }) } }
+  services.workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } }
+  services.uiWorkspace = { openSession: () => {} }
+  services.sessions = { binding: () => binding }
+  services.conversation = {
+    input: {
+      shellFor: () => shell,
+      // Mirrors the real facade: 'keep' applies only to an empty composer.
+      requestDraftInitialization: (_binding, options) => {
+        if (!composer.draft || options.whenDraftExists === 'replace') {
+          composer.draft = options.prompt
+          composer.draftRev += 1
+          return 'applied'
+        }
+        return 'preserved'
+      },
+    },
+    createDrafts: (_sessionId, files) => {
+      drafted.push(files.map((file) => file.name))
+      return files.map((file, index) => ({ id: `draft-${index}` }))
+    },
+  }
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(new Uint8Array([1, 2, 3]), {
+    status: 200,
+    headers: { 'content-type': 'image/png' },
+  })
+  try {
+    const record = { sessionId: 'session-new', draft: { text: '需求正文', assets } }
+    const restored = await api.prepareDraft(record)
+    assert.equal(restored.ok, true)
+    assert.equal(restored.attachments, 2)
+    assert.deepEqual(restored.missing, [])
+    assert.deepEqual(composer.attachmentIds, ['draft-0', 'draft-1'])
+    assert.deepEqual(drafted, [['tapd_0.png', 'tapd_1.png']])
+
+    // A composer that refuses attachments must report them instead of
+    // returning a success that leaves an empty composer behind.
+    composer.attachmentIds = []
+    accept = false
+    const refused = await api.prepareDraft(record)
+    assert.equal(refused.ok, true)
+    assert.equal(refused.attachments, 0)
+    assert.deepEqual(refused.missing, ['tapd_0.png', 'tapd_1.png'])
+    assert.equal(refused.reason, 'composer')
+
+    // Text the operator typed themselves wins over the stored draft.
+    accept = true
+    drafted.length = 0
+    composer.draft = '我自己写的'
+    const typed = await api.prepareDraft(record)
+    assert.equal(typed.preserved, true)
+    assert.equal(typed.attachments, 0)
+    assert.deepEqual(drafted, [])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 function expand(node, out = []) {
   if (node === null || node === undefined || typeof node !== 'object') return out
   if (Array.isArray(node)) {
