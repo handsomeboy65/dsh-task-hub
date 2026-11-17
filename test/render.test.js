@@ -667,3 +667,33 @@ test('the dispatch dialog previews the brief without leaving the form', () => {
   }))
   assert.ok(loading.some((node) => node.props?.className === 'tt-preview-loading'))
 })
+
+test('cards carry a preview button that opens the brief without the dispatch form', () => {
+  const client = globalThis.__taskHubBundle.factory(() => fakeReact())
+  const { StoryRow, DispatchModal } = client.__test
+  const seen = []
+  const row = expand(StoryRow({
+    t: (key) => key,
+    story: { id: '1', shortId: '1', name: '预览需求', source: 'tapd' },
+    showApp: false,
+    showSource: false,
+    onDispatch: () => {},
+    onPreview: (story) => seen.push(story.id),
+  }))
+  const preview = row.filter((node) => node.type === 'button').find((node) => node.props.children === 'previewShort')
+  assert.ok(preview, 'undispatched rows must offer a preview')
+  preview.props.onClick()
+  assert.deepEqual(seen, ['1'])
+  assert.ok(row.filter((node) => node.type === 'button').some((node) => node.props.children === 'dispatch'))
+
+  // A re-dispatch keeps the recorded branch, so the dialog offers both a card
+  // shortcut and the in-form preview.
+  const dispatched = expand(DispatchModal({
+    t: (key) => key,
+    story: { id: '1', name: '预览需求', dispatch: { sessionId: 's', branch: 'feat/x' } },
+    form: { conversation: 'new', prompt: '' },
+    preview: null,
+    busy: false,
+  }))
+  assert.ok(dispatched.some((node) => node.type === 'button' && node.props.children === 'previewAction'))
+})

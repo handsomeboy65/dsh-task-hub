@@ -369,3 +369,27 @@ test('preview builds the exact dispatch brief without touching git or the host',
   assert.equal(await store.findDispatch('zentao', 'story-101') === null, false)
   assert.ok(key)
 })
+
+test('a card preview needs no branch and still shows the requirement', async (t) => {
+  t.mock.method(globalThis, 'fetch', trackerFetch)
+  const repo = await tempRepo()
+  const root = (await gitExec(repo, ['rev-parse', '--show-toplevel'])).trim()
+  t.after(() => rm(repo, { force: true, recursive: true }))
+  const host = setupHost({
+    secrets: { ZENTAO_PASSWORD: 'fake-zt-password' },
+    workspace: { id: 'w1', path: root },
+  })
+  const before = await gitExec(repo, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads'])
+  const preview = await host.value('preview', {
+    provider: 'zentao',
+    story: ZENTAO_STORY,
+    workspacePath: root,
+  })
+  assert.equal(preview.branch, '')
+  assert.equal(preview.worktreePath, '')
+  assert.match(preview.brief, /最新需求正文/)
+  assert.match(preview.brief, /- 仓库：`/)
+  assert.ok(!preview.brief.includes('工作分支'))
+  assert.deepEqual(host.created, [])
+  assert.equal(await gitExec(repo, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads']), before)
+})

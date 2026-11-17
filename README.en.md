@@ -64,8 +64,11 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
 
 ## Preview before dispatch
 
-The dispatch dialog has a **Preview brief** button. It expands, in place, exactly what will be typed into the composer: requirement text, references, attachment names, branch and checkout, and the execution rules. Preview and dispatch call the same builder (`buildDispatchBrief`), so the two cannot drift apart.
+Every task card carries a **Preview** button, so the brief can be read before opening the dispatch dialog; the dialog's **Preview brief** button additionally reflects the branch, workspace, and extra instructions currently filled in.
 
+The brief covers requirement text, references, attachment names, branch and checkout, and the execution rules. Preview and dispatch call the same builder (`buildDispatchBrief`), so the two cannot drift apart.
+
+- A card preview has no branch yet, so its checkout section only names the repository; once a branch is filled in, the dialog preview is the final wording.
 - Read-only: it refreshes the requirement once, reads attachment **metadata** only, and never downloads files, creates branches, worktrees, or sessions.
 - Editing the branch, workspace, or extra instructions invalidates the shown brief immediately; ask for a fresh preview instead of trusting a stale one.
 - A copy button lets you paste the brief elsewhere first.
