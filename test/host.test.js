@@ -313,3 +313,59 @@ test('new conversations use the task branch when the original workspace has swit
     })
   }
 })
+
+test('preview builds the exact dispatch brief without touching git or the host', async (t) => {
+  t.mock.method(globalThis, 'fetch', trackerFetch)
+  const repo = await tempRepo()
+  const root = (await gitExec(repo, ['rev-parse', '--show-toplevel'])).trim()
+  t.after(() => rm(repo, { force: true, recursive: true }))
+  const host = setupHost({
+    secrets: { ZENTAO_PASSWORD: 'fake-zt-password' },
+    workspace: { id: 'w1', path: root },
+  })
+  const request = {
+    provider: 'zentao',
+    story: ZENTAO_STORY,
+    workspaceId: 'w1',
+    branchName: 'feature-preview',
+    baseBranch: 'main',
+    requestId: 'preview-intent',
+  }
+  const worktrees = await gitExec(repo, ['worktree', 'list', '--porcelain'])
+  const key = 'zentao:story-101'
+  const preview = await host.value('preview', request)
+  assert.equal(preview.branch, 'feature-preview')
+  assert.equal(preview.baseBranch, 'main')
+  assert.equal(preview.worktreePath, path.join(path.dirname(root), '.dsh-worktrees', path.basename(root) + '-feature-preview'))
+  assert.match(preview.brief, /禅道任务/)
+  assert.match(preview.brief, /feature-preview/)
+  assert.deepEqual(host.created, [])
+  assert.equal(await gitExec(repo, ['branch', '--list', 'feature-preview']), '')
+  assert.equal(await gitExec(repo, ['worktree', 'list', '--porcelain']), worktrees)
+
+  const dispatched = await host.value('dispatch', request)
+  t.after(() => Promise.all([
+    gitExec(repo, ['worktree', 'remove', '--force', dispatched.worktreePath]).catch(() => {}),
+    gitExec(repo, ['branch', '-D', 'feature-preview']).catch(() => {}),
+  ]))
+  assert.equal(dispatched.draft.text, preview.brief)
+  assert.equal((await store.findDispatch('zentao', 'story-101')).draft.text, preview.brief)
+
+  // Re-dispatching replays the recorded checkout instead of probing git again.
+  const replay = await host.call('preview', {
+    provider: 'zentao',
+    story: ZENTAO_STORY,
+    checkout: {
+      branch: dispatched.branch,
+      baseBranch: dispatched.baseBranch,
+      worktreePath: dispatched.worktreePath,
+      repoRoot: dispatched.repoPath,
+    },
+  })
+  assert.equal(replay.ok, true, replay.error?.message)
+  assert.equal(replay.value.branch, dispatched.branch)
+  assert.equal(replay.value.worktreePath, dispatched.worktreePath)
+  assert.match(replay.value.brief, /feature-preview/)
+  assert.equal(await store.findDispatch('zentao', 'story-101') === null, false)
+  assert.ok(key)
+})
