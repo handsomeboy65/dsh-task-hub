@@ -179,10 +179,12 @@ test('extractImagePaths keeps TAPD captures from a description', () => {
     "<p><img alt='x' src='https://www.tapd.cn/tfl/captures/2026-10/b.jpg'></p>",
     '<img src="data:image/png;base64,AAAA">',
     '<img src="/static/logo.svg">',
+    '<img data-src="/wrong.png" src="/files/get_image?image_path=wrapped.png&amp;size=full">',
   ].join('')
   assert.deepEqual(extractImagePaths(html), [
     '/tfl/captures/2026-10/a.png',
     'https://www.tapd.cn/tfl/captures/2026-10/b.jpg',
+    '/files/get_image?image_path=wrapped.png&size=full',
   ])
 })
 

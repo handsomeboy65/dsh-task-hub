@@ -680,3 +680,181 @@ test('a new conversation on a dispatched task shows the saved branch and skips c
   assert.equal(extra.props.open, undefined)
   assert.ok(!nodes.some((node) => node.type === 'input' || node.type === 'select'))
 })
+
+test('requirement detail modal shows the description on the left and read-only fields on the right', () => {
+  const client = globalThis.__taskHubBundle.factory(() => fakeReact())
+  const { StoryDetailModal } = client.__test
+  const markup = render(StoryDetailModal({
+    t: (key) => key,
+    story: {
+      id: 'story-101',
+      remoteId: '101',
+      source: 'zentao',
+      shortId: '#101',
+      name: '测试用户需求',
+      vStatus: '进行中',
+      description: '<p>背景：</p><p>功能需求：<br>1、新增上传</p>',
+      iterationName: '迭代A',
+      app: '德速TMS2.0操作端',
+      priorityLabel: '紧急',
+      owner: '张三',
+      begin: '2026-11-02',
+      due: '2026-11-06',
+      estimate: '8',
+      creator: '李四',
+      created: '2026-11-02 17:51:30',
+      modified: '2026-11-17 14:31:05',
+      rootShortId: '#100',
+      rootName: '父需求',
+      url: 'https://x',
+    },
+    loading: false,
+    failed: false,
+    onClose: () => {},
+    onDispatch: () => {},
+  }))
+  assert.match(markup, /requirementInfo/)
+  assert.match(markup, /背景：/)
+  assert.match(markup, /功能需求：/)
+  assert.match(markup, /1、新增上传/)
+  assert.match(markup, /basicInfo/)
+  assert.match(markup, /迭代A/)
+  assert.match(markup, /2026-11-06/)
+  assert.match(markup, /父需求/)
+  assert.match(markup, /openSource/)
+  assert.doesNotMatch(markup, /<input|<textarea|<select/)
+})
+
+test('requirement detail sheet lists attachments and comments and stays read-only', () => {
+  const client = globalThis.__taskHubBundle.factory(() => fakeReact())
+  const { StoryDetailModal } = client.__test
+  const markup = render(StoryDetailModal({
+    t: (key) => key,
+    story: {
+      id: '101',
+      source: 'tapd',
+      shortId: '1004478',
+      name: '后端-卡航合单--WMS出库信息回调箱号处理逻辑',
+      status: '新建(需求设计中)',
+      description: 'WMS 出库回传箱号，匹配订单的入库箱号。',
+      url: 'https://www.tapd.cn/',
+    },
+    attachments: [
+      { id: '9', name: '卡航合单_整体业务流程图.png', size: 2048, owner: '叶又财', created: '2026-11-17 11:20:58' },
+    ],
+    comments: [
+      { id: '5', author: '叶又财', created: '2026-11-06 18:10', text: '配置中：去掉编辑功能' },
+    ],
+    loading: false,
+    failed: false,
+    error: '',
+    onClose: () => {},
+    onDispatch: () => {},
+  }))
+  // The fake renderer drops class names, so assert the sheet structure itself.
+  assert.match(markup, /<div><aside><header>/)
+  assert.match(markup, /attachments · 1/)
+  assert.match(markup, /卡航合单_整体业务流程图\.png/)
+  assert.match(markup, /PNG/)
+  assert.match(markup, /2 KB/)
+  assert.match(markup, /comments · 1/)
+  assert.match(markup, /配置中：去掉编辑功能/)
+  assert.match(markup, /叶又财/)
+  assert.doesNotMatch(markup, /<input|<textarea|<select/)
+})
+
+test('requirement detail sheet shows screenshots from older hosts inside the description section', () => {
+  const client = globalThis.__taskHubBundle.factory(() => fakeReact())
+  const { StoryDetailModal } = client.__test
+  const markup = render(StoryDetailModal({
+    t: (key) => key,
+    story: {
+      id: '101',
+      source: 'tapd',
+      shortId: '1003274',
+      name: '后端-客户端列表新增打印状态',
+      status: '已完成',
+      description: '对比截图见下。',
+    },
+    images: [{ name: '订单列表.png', mediaType: 'image/png', dataUrl: 'data:image/png;base64,AAAA' }],
+    attachments: [],
+    comments: [],
+    loading: false,
+    failed: false,
+    error: '',
+    onClose: () => {},
+    onDispatch: () => {},
+  }))
+  assert.match(markup, /<section><div>对比截图见下。<button><img><\/img><\/button><\/div><\/section>/)
+  assert.doesNotMatch(markup, /images · 1/)
+})
+
+test('requirement detail rendering preserves styled paragraphs and semantic table cells', (t) => {
+  const text = (value) => ({ nodeType: 3, nodeValue: value })
+  const element = (localName, childNodes = [], props = {}) => ({
+    nodeType: 1,
+    localName,
+    childNodes,
+    children: childNodes.filter((child) => child.nodeType === 1),
+    getAttribute: () => null,
+    ...props,
+    style: { textDecoration: '', textDecorationLine: '', ...props.style },
+  })
+  const paragraph = element('p', [text('必填字段')], {
+    style: { fontWeight: 'bold', backgroundImage: 'url(https://example.test/pixel)' },
+  })
+  const header = element('th', [text('说明')], { scope: 'col', colSpan: 2, rowSpan: 1 })
+  const table = element('table', [
+    element('colgroup', [element('col', [], { span: 2 })], { span: 1 }),
+    element('thead', [element('tr', [header])]),
+    element('tbody', [element('tr', [element('td', [element('strong', [text('体积')])])])]),
+  ])
+  globalThis.document = { createElement: () => ({ content: { childNodes: [paragraph, table] } }) }
+  t.after(() => { delete globalThis.document })
+  const { StoryDetailModal } = globalThis.__taskHubBundle.factory(() => fakeReact()).__test
+  const nodes = expand(StoryDetailModal({
+    t: (key) => key,
+    story: { name: '卡航合单', source: 'tapd', description: '<p>必填字段</p><table></table>' },
+  }))
+  const body = nodes.find((node) => node.props?.className === 'tt-sheet-desc')
+  const content = expand(body)
+  assert.deepEqual(content.find((node) => node.type === 'p').props.style, { fontWeight: 700 })
+  assert.equal(content.find((node) => node.type === 'col').props.span, 2)
+  const cell = content.find((node) => node.type === 'th')
+  assert.equal(cell.props.scope, 'col')
+  assert.equal(cell.props.colSpan, 2)
+  assert.match(render(body), /<tbody><tr><td><strong>体积<\/strong><\/td><\/tr><\/tbody>/)
+})
+
+test('requirement detail highlights source fields and shares the card session actions', () => {
+  const { StoryDetailModal } = globalThis.__taskHubBundle.factory(() => fakeReact()).__test
+  const story = {
+    id: '101', name: '卡航合单', source: 'tapd', status: 'planning', vStatus: '新建(需求设计中)',
+    priorityLabel: '紧急', app: '操作端', url: 'https://www.tapd.cn/story',
+    dispatch: { sessionId: 'existing-session', branch: 'issue_101', draft: { text: '已准备的需求' } },
+  }
+  const calls = []
+  const props = {
+    story, t: (key) => key,
+    onOpen: (...args) => calls.push(args),
+    onDispatch: (entry) => calls.push(entry),
+    onSync: () => calls.push('sync'),
+  }
+  const button = (nodes, key) => nodes.find((node) => node.type === 'button' &&
+    (node.props.children === key || Array.isArray(node.props.children) && node.props.children.includes(key)))
+  const nodes = expand(StoryDetailModal(props))
+  for (const [label, tone] of [['新建(需求设计中)', 'amber'], ['紧急', 'red'], ['操作端', 'amber']]) {
+    assert.ok(nodes.some((node) => node.type === 'span' && node.props.children === label &&
+      node.props.className?.includes('tt-badge-' + tone)))
+  }
+  button(nodes, 'openSession').props.onClick()
+  button(nodes, 'dispatch').props.onClick()
+  button(nodes, 'syncRequirement').props.onClick()
+  assert.deepEqual(calls, [['existing-session', story.dispatch], story, 'sync'])
+  const missing = expand(StoryDetailModal({
+    ...props, loading: true, story: { ...story, dispatch: { ...story.dispatch, sessionMissing: true } },
+  }))
+  assert.equal(button(missing, 'openSession'), undefined)
+  assert.ok(button(missing, 'redispatch'))
+  assert.equal(button(missing, 'syncRequirement').props.disabled, true)
+})

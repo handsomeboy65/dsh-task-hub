@@ -29,7 +29,18 @@ function trackerFetch(url) {
   const tapd = (data) => Response.json({ status: 1, data })
   if (hostname === 'api.tapd.cn') {
     if (pathname === '/stories') {
-      const story = (id, status, vStatus) => ({ Story: { id, name: 'TAPD ' + id, status, v_status: vStatus, completed: status === 'closed' ? '2026-11-12' : '' } })
+      const story = (id, status, vStatus) => ({
+        Story: {
+          id,
+          name: 'TAPD ' + id,
+          status,
+          v_status: vStatus,
+          completed: status === 'closed' ? '2026-11-12' : '',
+          developer: 'dev1',
+          cc: 'cc1',
+          effort: '3',
+        },
+      })
       return tapd(searchParams.has('id') ? [story(STORY_ID, 'developing', '新建(需求设计中)')] : [
         story(STORY_ID, 'developing', '新建(需求设计中)'),
         story('102', 'closed', '已上线'),
@@ -38,6 +49,16 @@ function trackerFetch(url) {
     if (pathname === '/stories/get_fields_info') return tapd({
       status: { options: { developing: '研发中', testing: '测试中(Testing)', status_18: '待发布(测试通过)' } },
     })
+    if (pathname === '/attachments') {
+      return tapd([{ Attachment: {
+        id: '9', filename: '原型.html', size: '2048', created: '2026-11-17 14:31:05', owner: '叶又财',
+      } }])
+    }
+    if (pathname === '/comments') {
+      return tapd([{ Comment: {
+        id: '5', description: '配置中：去掉编辑功能', author: '叶又财', created: '2026-11-06 18:10',
+      } }])
+    }
     if (pathname === '/stories/custom_fields_settings' || pathname === '/iterations') return tapd([])
   } else if (hostname === 'zentao.example.test') {
     if (pathname.endsWith('/tokens')) return Response.json({ token: 'fake-zt-token' })
@@ -49,7 +70,24 @@ function trackerFetch(url) {
       })
     }
     if (pathname.endsWith('/stories/101')) {
-      return Response.json({ id: '101', spec: '<p>最新需求正文</p>', files: [{ id: '4', title: 'details.txt', extension: 'txt' }] })
+      return Response.json({
+        id: '101',
+        title: '禅道任务',
+        status: 'active',
+        stage: 'testing',
+        pri: 2,
+        assignedTo: { account: 'account', realname: '负责人' },
+        dueDate: '2026-11-20',
+        spec: '<p>最新需求正文</p>',
+        estimate: '5',
+        closedDate: '2026-11-01',
+        mailto: 'cc@example.test',
+        parent: '100',
+        files: [{
+          id: '4', title: 'details.txt', extension: 'txt', size: '12', addedBy: 'admin', addedDate: '2026-11-17 12:00:00',
+        }],
+        actions: [{ id: '7', action: 'commented', actor: 'admin', date: '2026-11-06 18:10', comment: '评论内容' }],
+      })
     }
     if (pathname.endsWith('/files/4')) return new Response('new attachment')
   }
@@ -358,4 +396,95 @@ test('new conversations use the task branch when the original workspace has swit
       assert.equal(result.previousSessions[0].sessionId, original.sessionId)
     })
   }
+})
+
+
+test('story route returns a read-only detail record without creating a dispatch', async (t) => {
+  t.mock.method(globalThis, 'fetch', trackerFetch)
+  await store.saveState({})
+  await store.saveSettings({ provider: 'tapd', zentao: {
+    baseUrl: 'https://zentao.example.test', account: 'account', containerIds: ['7'],
+  } })
+  const host = setupHost({ secrets: { TAPD_API_TOKEN: 'fake-tapd-token', ZENTAO_PASSWORD: 'fake-zt-password' } })
+
+  const tapd = await host.value('story', {
+    provider: 'tapd',
+    storyId: '101',
+    projectId: '42',
+    story: { id: '101', projectId: '42', source: 'tapd', name: 'TAPD 101' },
+  })
+  assert.equal(tapd.story.uid, 'tapd:101')
+  assert.equal(tapd.story.developer, 'dev1')
+  assert.equal(tapd.story.cc, 'cc1')
+  assert.equal(tapd.story.effort, '3')
+  assert.ok(Array.isArray(tapd.images))
+  assert.equal(tapd.attachments.length, 1)
+  assert.equal(tapd.attachments[0].name, '原型.html')
+  assert.equal(tapd.attachments[0].size, 2048)
+  assert.equal(tapd.comments.length, 1)
+  assert.equal(tapd.comments[0].text, '配置中：去掉编辑功能')
+  assert.equal(await store.findDispatch('tapd', '101'), null)
+
+  const zentao = await host.value('story', {
+    provider: 'zentao',
+    storyId: 'story-101',
+    projectId: '7',
+    story: { id: 'story-101', remoteId: '101', source: 'zentao', projectId: '7', kind: 'story', name: '禅道' },
+  })
+  assert.equal(zentao.story.uid, 'zentao:story-101')
+  assert.equal(zentao.story.name, '禅道任务')
+  assert.equal(zentao.story.status, 'active')
+  assert.equal(zentao.story.stageLabel, '测试中')
+  assert.equal(zentao.story.priorityLabel, 'P2')
+  assert.equal(zentao.story.owner, '负责人')
+  assert.equal(zentao.story.due, '2026-11-20')
+  assert.equal(zentao.story.estimate, '5')
+  assert.equal(zentao.story.closedDate, '2026-11-01')
+  assert.equal(zentao.story.mailto, 'cc@example.test')
+  assert.equal(zentao.story.parentId, '100')
+  assert.equal(zentao.attachments.length, 1)
+  assert.equal(zentao.attachments[0].name, 'details.txt')
+  assert.equal(zentao.attachments[0].size, 12)
+  assert.equal(zentao.comments.length, 1)
+  assert.equal(zentao.comments[0].text, '评论内容')
+  assert.equal(await store.findDispatch('zentao', 'story-101'), null)
+
+  const missing = await host.call('story', { provider: 'tapd', story: {} })
+  assert.equal(missing.ok, false)
+  assert.equal(missing.error.code, 'source/bad-request')
+})
+
+test('story route inlines screenshots embedded in the requirement body', async (t) => {
+  const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const target = String(url)
+    if (target.startsWith('https://files.test/')) {
+      return new Response(png, { headers: { 'content-type': 'image/png' } })
+    }
+    if (target.includes('/files/get_image')) {
+      return Response.json({ status: 1, data: { Attachment: { download_url: 'https://files.test/shot.png' } } })
+    }
+    const response = await trackerFetch(target, init)
+    if (target.includes('/stories?') && target.includes('id=')) {
+      const body = await response.json()
+      body.data = body.data.map((row) => ({
+        Story: { ...row.Story, description: '<p>见截图</p><img src="https://www.tapd.cn/files/get_image?image_path=shot.png">' },
+      }))
+      return Response.json(body)
+    }
+    return response
+  })
+  await store.saveState({})
+  await store.saveSettings({ provider: 'tapd' })
+  const host = setupHost({ secrets: { TAPD_API_TOKEN: 'fake-tapd-token' } })
+  const detail = await host.value('story', {
+    provider: 'tapd',
+    storyId: '101',
+    projectId: '42',
+    story: { id: '101', projectId: '42', source: 'tapd', name: 'TAPD 101' },
+  })
+  assert.equal(detail.images.length, 1)
+  assert.match(detail.images[0].dataUrl, /^data:image\/png;base64,/)
+  assert.equal(detail.images[0].name, 'shot.png')
+  assert.deepEqual(detail.images[0].sources, ['https://www.tapd.cn/files/get_image?image_path=shot.png'])
 })
