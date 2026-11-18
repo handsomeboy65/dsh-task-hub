@@ -15,7 +15,7 @@ import {
   storyFieldsFor,
   storyUrl,
 } from '../lib/tapd.js'
-import { buildTaskPrompt, htmlToText, refreshTaskPrompt, sessionTitleFor, upgradeDraftText } from '../lib/prompt.js'
+import { buildTaskPrompt, compactBriefText, htmlToText, refreshTaskPrompt, sessionTitleFor, upgradeDraftText } from '../lib/prompt.js'
 import { worktreePathFor } from '../lib/dispatch.js'
 
 test('normalizeSettings fills defaults and dedupes projects', () => {
@@ -184,12 +184,35 @@ test('buildTaskPrompt renders a plain-text brief for the composer', () => {
   assert.match(prompt, /关联应用：客户端/)
   assert.match(prompt, /【需求内容】/)
   assert.match(prompt, /需要 CSV/)
+  // Compact layout: header lines together, the label directly above its
+  // content, and a single blank line before the next section.
+  assert.equal(
+    prompt,
+    'TAPD需求 #101：导出报表\n需求地址：https://x\n关联应用：客户端\n\n【需求内容】\n需要 CSV',
+  )
+  assert.doesNotMatch(prompt, /【需求内容】\n\n/)
   assert.ok(prompt.indexOf('【需求内容】') < prompt.indexOf('需要 CSV'))
   assert.doesNotMatch(prompt, /^#/m)
   assert.doesNotMatch(prompt, /工作环境|执行要求|工作分支|对比基线|不要执行 push/)
   assert.doesNotMatch(prompt, /issue_101|new_test|\/tmp\/wt/)
   assert.doesNotMatch(prompt, /<b>/)
   assert.doesNotMatch(prompt, /处理人|状态|优先级|迭代|开始：|截止：|张三|planning|2026-11-04/)
+})
+
+test('compactBriefText keeps one blank line before each section and none inside', () => {
+  const sparse = 'TAPD需求 #1：标题\n\n需求地址：https://x\n\n【需求内容】\n\n背景：\n\n功能需求：\n1、a\n\n2、b\n\n【参考资料】\n\n- 图片：a.png'
+  const compact = 'TAPD需求 #1：标题\n需求地址：https://x\n\n【需求内容】\n背景：\n功能需求：\n1、a\n2、b\n\n【参考资料】\n- 图片：a.png'
+  assert.equal(compactBriefText(sparse), compact)
+  assert.equal(compactBriefText(compact), compact)
+})
+
+test('buildTaskPrompt collapses blank lines inside the description', () => {
+  const prompt = buildTaskPrompt({
+    id: '2',
+    name: '多段需求',
+    description: '<p>背景：</p><p></p><p>功能需求：</p><p>1、a</p><p>2、b</p>',
+  })
+  assert.equal(prompt, 'TAPD需求 #2：多段需求\n\n【需求内容】\n背景：\n功能需求：\n1、a\n2、b')
 })
 
 test('buildTaskPrompt names both the parent requirement and the child story', () => {

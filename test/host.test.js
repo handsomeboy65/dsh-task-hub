@@ -154,9 +154,28 @@ test('stored Markdown drafts are upgraded to the plain-text brief on read', asyn
   // The composer still holds the old text; naming it lets the Client replace
   // an untouched composer and re-attach the screenshots.
   assert.equal(record.draft.previousText, legacyText)
+  // The brief itself is compact: header lines together, no empty line under a
+  // section label, no empty lines inside the description.
+  assert.equal(
+    record.draft.text,
+    '禅道用户需求 #4：测试用户需求\n\n【需求内容】\n测试用户需求\n\n【参考资料】\n- 附件：入仓单.xlsx',
+  )
+  // A composer opened between the heading upgrade and the layout compaction
+  // holds the sparse text; it is replaceable too.
+  assert.equal(
+    record.draft.previousTextUpgraded,
+    '禅道用户需求 #4：测试用户需求\n\n【需求内容】\n\n测试用户需求\n\n【参考资料】\n\n- 附件：入仓单.xlsx',
+  )
   assert.match(record.previousSessions[0].draft.text, /【需求内容】/)
   assert.equal(record.previousSessions[0].draft.previousText, legacyText)
   assert.doesNotMatch(record.previousSessions[0].draft.text, /##|工作环境/)
+  // A draft stored with the plain-text but sparse layout is compacted on read
+  // as well, so the operator does not have to wait for a re-dispatch.
+  await store.saveState({ 'tapd:9': { sessionId: 'sparse', draft: { text: 'TAPD需求 #9：稀疏\n\n【需求内容】\n\n正文\n\n【参考资料】\n\n- 附件：a.pdf' } } })
+  const sparse = (await store.loadState())['tapd:9']
+  assert.equal(sparse.draft.text, 'TAPD需求 #9：稀疏\n\n【需求内容】\n正文\n\n【参考资料】\n- 附件：a.pdf')
+  assert.equal(sparse.draft.previousText, 'TAPD需求 #9：稀疏\n\n【需求内容】\n\n正文\n\n【参考资料】\n\n- 附件：a.pdf')
+  assert.equal(sparse.draft.previousTextUpgraded, undefined)
 })
 
 test('session lookup errors stay distinct from archived sessions and blank drafts', async () => {

@@ -396,6 +396,19 @@ test('opening a draft restores its screenshots instead of dropping them', async 
     assert.deepEqual(composer.attachmentIds, ['existing-1'])
     assert.deepEqual(drafted, [])
 
+    // A composer opened after the headings were converted but before the
+    // layout was compacted holds the sparse text; it is replaceable too.
+    composer.draft = '旧模板正文 稀疏版'
+    composer.attachmentIds = []
+    drafted.length = 0
+    const sparseComposer = await api.prepareDraft({
+      sessionId: 'session-new',
+      draft: { text: '新正文', previousText: '更早的旧模板', previousTextUpgraded: '旧模板正文 稀疏版', assets },
+    })
+    assert.equal(sparseComposer.attachments, 2)
+    assert.equal(composer.draft, '新正文')
+    assert.deepEqual(composer.attachmentIds, ['draft-0', 'draft-1'])
+
     // If the composer refuses the replacement, the operator has not edited it
     // either — the attachments must still be restored instead of dropped.
     composer.draft = '旧模板正文'
