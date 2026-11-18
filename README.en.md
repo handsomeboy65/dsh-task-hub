@@ -62,18 +62,6 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
 | Isolated worktree | On by default: creates `.dsh-worktrees/<repo>-<branch>` next to the repository so your current branch is left alone |
 | Hide completed | The list shows only open items by default |
 
-## Preview before dispatch
-
-Every task card carries a **Preview** button, so the brief can be read before opening the dispatch dialog; the dialog's **Preview brief** button additionally reflects the branch, workspace, and extra instructions currently filled in.
-
-The brief covers requirement text, references, attachment names, branch and checkout, and the execution rules. Preview and dispatch call the same builder (`buildDispatchBrief`), so the two cannot drift apart.
-
-- A card preview has no branch yet, so its checkout section only names the repository; once a branch is filled in, the dialog preview is the final wording.
-- Read-only: it refreshes the requirement once, reads attachment **metadata** only, and never downloads files, creates branches, worktrees, or sessions.
-- Editing the branch, workspace, or extra instructions invalidates the shown brief immediately; ask for a fresh preview instead of trusting a stale one.
-- A copy button lets you paste the brief elsewhere first.
-- When an existing checkout is reused, the preview replays the recorded branch and workspace instead of probing the repository.
-
 ## Dispatch flow
 
 1. The panel lists items whose assignee is you, newest first, filterable by Open / Done / All. For TAPD stories the **App** custom field (e.g. `德速TMS2.0客户端`) gets its own column ahead of the ID; multiple apps stack as separate tags, and the column is dropped entirely when the source has no app field.
