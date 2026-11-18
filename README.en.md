@@ -4,7 +4,7 @@
 
 A task hub for DSH: reads the requirements and tasks assigned to you from **TAPD / ZenTao**, then lets you pick a workspace, type a branch name, and dispatch the selected task to an agent.
 
-Use the TAPD, ZenTao, and **All sources** tabs. Active ZenTao requirements are grouped by development stage. The **All** filter shows empty columns for TAPD project statuses and for the ZenTao stages or statuses of the selected scope. Use **Search** in the top right to find tasks by ID, parent ID, or title. The panel refreshes tracker data every 90 seconds while visible.
+Click a requirement title to open a read-only detail sheet from the right: description, attachments and comments on the left, basic fields (status, iteration, app, module, owner, developers, dates, effort, CC, parent) on the right. It never writes back to TAPD or ZenTao; the footer links to the source or dispatches directly. Use the TAPD, ZenTao, and **All sources** tabs. Active ZenTao requirements are grouped by development stage. The **All** filter shows empty columns for TAPD project statuses and for the ZenTao stages or statuses of the selected scope. Use **Search** in the top right to find tasks by ID, parent ID, or title. The panel refreshes tracker data every 90 seconds while visible.
 
 ## 33-second demo
 
