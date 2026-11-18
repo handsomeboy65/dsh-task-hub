@@ -15,7 +15,7 @@ import {
   storyFieldsFor,
   storyUrl,
 } from '../lib/tapd.js'
-import { buildTaskPrompt, htmlToText, refreshTaskPrompt, sessionTitleFor } from '../lib/prompt.js'
+import { buildTaskPrompt, htmlToText, refreshTaskPrompt, sessionTitleFor, upgradeDraftText } from '../lib/prompt.js'
 import { worktreePathFor } from '../lib/dispatch.js'
 
 test('normalizeSettings fills defaults and dedupes projects', () => {
@@ -171,7 +171,7 @@ test('htmlToText strips markup, decodes entities and keeps bullets', () => {
   assert.doesNotMatch(text, /<[a-z]/i)
 })
 
-test('buildTaskPrompt keeps execution context and omits management fields', () => {
+test('buildTaskPrompt renders a plain-text brief for the composer', () => {
   const prompt = buildTaskPrompt(
     {
       id: '101', name: '导出报表', description: '<b>需要</b> CSV', status: 'planning', owner: '张三', url: 'https://x',
@@ -179,18 +179,17 @@ test('buildTaskPrompt keeps execution context and omits management fields', () =
     },
     { branch: 'issue_101', baseBranch: 'new_test', worktreePath: '/tmp/wt' },
   )
-  assert.match(prompt, /^# TAPD需求 #101：导出报表/)
+  assert.match(prompt, /^TAPD需求 #101：导出报表/)
   assert.match(prompt, /需求地址：https:\/\/x/)
   assert.match(prompt, /关联应用：客户端/)
-  assert.match(prompt, /\/tmp\/wt/)
-  assert.match(prompt, /issue_101/)
-  assert.match(prompt, /new_test/)
+  assert.match(prompt, /【需求内容】/)
   assert.match(prompt, /需要 CSV/)
-  assert.match(prompt, /不要执行 push/)
+  assert.ok(prompt.indexOf('【需求内容】') < prompt.indexOf('需要 CSV'))
+  assert.doesNotMatch(prompt, /^#/m)
+  assert.doesNotMatch(prompt, /工作环境|执行要求|工作分支|对比基线|不要执行 push/)
+  assert.doesNotMatch(prompt, /issue_101|new_test|\/tmp\/wt/)
   assert.doesNotMatch(prompt, /<b>/)
   assert.doesNotMatch(prompt, /处理人|状态|优先级|迭代|开始：|截止：|张三|planning|2026-11-04/)
-  assert.ok(prompt.indexOf('## 需求内容') < prompt.indexOf('## 工作环境'))
-  assert.ok(prompt.indexOf('## 工作环境') < prompt.indexOf('## 执行要求'))
 })
 
 test('buildTaskPrompt names both the parent requirement and the child story', () => {
@@ -205,10 +204,10 @@ test('buildTaskPrompt names both the parent requirement and the child story', ()
     },
     { branch: 'issue_1004297' },
   )
-  assert.match(prompt, /^# TAPD需求 #1004334：后端-客户端新增批量导出附件功能/)
+  assert.match(prompt, /^TAPD需求 #1004334：后端-客户端新增批量导出附件功能/)
   assert.match(prompt, /父需求：1004297/)
   assert.match(prompt, /父需求：1004297 客户端新增批量导出附件功能/)
-  assert.match(prompt, /issue_1004297/)
+  assert.doesNotMatch(prompt, /issue_1004297/)
 })
 
 test('buildTaskPrompt falls back when the description is empty', () => {
@@ -223,35 +222,95 @@ test('buildTaskPrompt preserves long descriptions and only lists supplied assets
     { source: 'zentao', requirementType: 'requirement', id: '4', name: '测试用户需求', description },
     { repoRoot: '/work/repo', attachments: [{ name: '入仓单.xlsx' }, null], images: [{ name: '截图.jpg' }] },
   )
-  assert.match(prompt, /^# 禅道用户需求 #4：测试用户需求/)
+  assert.match(prompt, /^禅道用户需求 #4：测试用户需求/)
   assert.ok(prompt.includes(description))
+  assert.match(prompt, /【参考资料】/)
   assert.match(prompt, /- 附件：入仓单.xlsx/)
   assert.match(prompt, /- 图片：截图.jpg/)
-  assert.match(prompt, /- 仓库：`\/work\/repo`/)
+  assert.doesNotMatch(prompt, /\/work\/repo/)
   assert.doesNotMatch(prompt, /已随本条消息发送|工作分支：|对比基线：/)
-  assert.doesNotMatch(buildTaskPrompt({ id: '1' }), /## 参考资料|工作分支：|对比基线：/)
+  assert.doesNotMatch(buildTaskPrompt({ id: '1' }), /【参考资料】|工作分支：|对比基线：/)
 })
 
-test('refreshTaskPrompt updates new and legacy drafts repeatedly while preserving surrounding edits', () => {
-  const suffix = '\n\n## 补充要求\n\n只修改后端'
+test('refreshTaskPrompt updates new and legacy drafts repeatedly while preserving the extra section', () => {
+  const suffix = '\n\n【补充要求】\n\n只修改后端'
   const current = buildTaskPrompt({ id: '1', name: '原始标题', description: '旧正文' }, { branch: 'original' }) + suffix
+  const oldCompact = '# TAPD需求 #1：原始标题\n\n## 需求内容\n\n旧正文' +
+    '\n\n## 工作环境\n\n- 仓库：`/tmp/wt`\n\n## 执行要求\n\n1. 先阅读需求' + suffix
   const legacy = '自定义开头\n\n## 需求描述\n旧正文\n\n## 附件\n- old.pdf' +
     '\n\n## 工作方式\n1. 先读需求、再看仓库现状（相关模块、已有约定、测试）' + suffix
-  for (const draft of [current, legacy]) {
+  for (const draft of [current, oldCompact, legacy]) {
     const refreshed = refreshTaskPrompt(draft, { description: '最新正文' }, { attachments: [{ name: 'new.pdf' }] })
+    assert.match(refreshed, /【需求内容】/)
     assert.match(refreshed, /最新正文/)
     assert.match(refreshed, /- 附件：new.pdf/)
-    assert.doesNotMatch(refreshed, /旧正文|old.pdf/)
+    assert.doesNotMatch(refreshed, /旧正文|old.pdf|## /)
     assert.ok(refreshed.endsWith(suffix))
     assert.equal(refreshTaskPrompt(refreshed, { description: '最新正文' }, { attachments: [{ name: 'new.pdf' }] }), refreshed)
-    const boundary = draft.includes('## 工作环境') ? '\n\n## 工作环境' : '\n\n## 工作方式'
-    assert.equal(refreshed.slice(refreshed.indexOf(boundary)), draft.slice(draft.indexOf(boundary)))
-    assert.equal(refreshed.split('\n\n## 需求内容')[0], draft.split(/\n\n## 需求(?:内容|描述)/)[0])
+    assert.ok(refreshed.indexOf('【需求内容】') < refreshed.indexOf('【参考资料】'))
+    assert.ok(refreshed.indexOf('【参考资料】') < refreshed.indexOf('【补充要求】'))
+    assert.equal(refreshed.split('\n\n【需求内容】')[0], draft.split(/\n\n(?:【|## )需求(?:内容|描述)/)[0])
   }
 })
 
+test('buildTaskPrompt keeps a single id marker for ZenTao short ids', () => {
+  const prompt = buildTaskPrompt(
+    { source: 'zentao', requirementType: 'requirement', id: 'story-4', shortId: '#4', name: '测试用户需求', description: '' },
+    { attachments: [{ name: '入仓单.xlsx' }] },
+  )
+  assert.match(prompt, /^禅道用户需求 #4：测试用户需求/)
+  assert.doesNotMatch(prompt, /##/)
+})
+
+test('upgradeDraftText rewrites a draft saved with the old Markdown template', () => {
+  const legacy = [
+    '# 禅道用户需求 ##4：测试用户需求',
+    '',
+    '需求地址：http://z/story-view-4-0-0-requirement.html',
+    '',
+    '## 需求内容',
+    '',
+    '测试用户需求',
+    '',
+    '## 参考资料',
+    '',
+    '- 附件：入仓单.xlsx',
+    '',
+    '## 工作环境',
+    '',
+    '- 仓库：`/tmp/wt`',
+    '- 工作分支：`issue_1004251`',
+    '- 对比基线：`master`',
+    '',
+    '## 执行要求',
+    '',
+    '1. 先阅读需求',
+    '2. 不要执行 push',
+    '',
+    '## 补充要求',
+    '',
+    '只改后端',
+  ].join('\n')
+  const upgraded = upgradeDraftText(legacy)
+  assert.match(upgraded, /^禅道用户需求 #4：测试用户需求/)
+  assert.match(upgraded, /【需求内容】/)
+  assert.match(upgraded, /测试用户需求/)
+  assert.match(upgraded, /【参考资料】/)
+  assert.match(upgraded, /- 附件：入仓单.xlsx/)
+  assert.match(upgraded, /【补充要求】/)
+  assert.match(upgraded, /只改后端/)
+  assert.ok(upgraded.indexOf('【需求内容】') < upgraded.indexOf('【参考资料】'))
+  assert.ok(upgraded.indexOf('【参考资料】') < upgraded.indexOf('【补充要求】'))
+  assert.doesNotMatch(upgraded, /##|工作环境|执行要求|工作分支|对比基线|不要执行 push|先阅读需求/)
+  assert.equal(upgradeDraftText(upgraded), upgraded)
+  assert.equal(
+    upgradeDraftText('TAPD需求 #1：标题\n\n【需求内容】\n\n正文'),
+    'TAPD需求 #1：标题\n\n【需求内容】\n\n正文',
+  )
+})
+
 test('refreshTaskPrompt preserves a custom draft when generated boundaries are absent', () => {
-  const custom = '用户自行编写的要求\n\n## 补充要求\n仅分析'
+  const custom = '用户自行编写的要求\n\n【补充要求】\n仅分析'
   const refreshed = refreshTaskPrompt(custom, { description: '最新正文' })
   assert.ok(refreshed.startsWith(custom + '\n\n'))
   assert.match(refreshed, /最新正文/)
