@@ -317,13 +317,13 @@ test('ZenTao dispatch loads detail text, embedded screenshots and files through 
   assert.deepEqual(assets.images[0].data, png)
   assert.deepEqual(assets.files, [{ name: '原型.pdf', data: pdf }])
 
-  const original = buildTaskPrompt(options.story, { branch: 'original' }) + '\n\n## 补充要求\n\n只修改后端'
+  const original = buildTaskPrompt(options.story, { branch: 'original' }) + '\n\n【补充要求】\n\n只修改后端'
   const refreshed = refreshTaskPrompt(original, story, { attachments: assets.files, images: assets.images })
   assert.match(refreshed, /需求正文/)
   assert.match(refreshed, /截图\.png/)
   assert.match(refreshed, /原型\.pdf/)
   assert.match(refreshed, /只修改后端$/)
-  assert.match(refreshed, /original/)
+  assert.doesNotMatch(refreshed, /original|工作环境/)
   assert.doesNotMatch(refreshed, /没有填写描述/)
 
   const before = paths.length

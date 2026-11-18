@@ -299,6 +299,7 @@ test('opening a draft restores its screenshots instead of dropping them', async 
   ]
   const composer = { draft: '', attachmentIds: [], draftRev: 1 }
   let accept = true
+  let refuseReplace = false
   const shell = {
     get snapshot() {
       return composer
@@ -319,6 +320,7 @@ test('opening a draft restores its screenshots instead of dropping them', async 
       shellFor: () => shell,
       // Mirrors the real facade: 'keep' applies only to an empty composer.
       requestDraftInitialization: (_binding, options) => {
+        if (refuseReplace && options.whenDraftExists === 'replace') return 'preserved'
         if (!composer.draft || options.whenDraftExists === 'replace') {
           composer.draft = options.prompt
           composer.draftRev += 1
@@ -365,6 +367,62 @@ test('opening a draft restores its screenshots instead of dropping them', async 
     assert.equal(typed.preserved, true)
     assert.equal(typed.attachments, 0)
     assert.deepEqual(drafted, [])
+
+    // A composer still holding the pre-upgrade draft is untouched: replace it
+    // with the new brief and restore the screenshots it came with.
+    composer.draft = '旧模板正文'
+    composer.attachmentIds = []
+    drafted.length = 0
+    const upgraded = await api.prepareDraft({
+      sessionId: 'session-new',
+      draft: { text: '新正文', previousText: '旧模板正文', assets },
+    })
+    assert.equal(upgraded.attachments, 2)
+    assert.equal(composer.draft, '新正文')
+    assert.deepEqual(composer.attachmentIds, ['draft-0', 'draft-1'])
+
+    // The replacement only swaps the text: chips the composer already shows
+    // stay, and must not be duplicated by the restore path.
+    composer.draft = '旧模板正文'
+    composer.attachmentIds = ['existing-1']
+    drafted.length = 0
+    const refreshed = await api.prepareDraft({
+      sessionId: 'session-new',
+      draft: { text: '新正文', previousText: '旧模板正文', assets },
+    })
+    assert.equal(refreshed.attachments, 0)
+    assert.equal(refreshed.preserved, undefined)
+    assert.equal(composer.draft, '新正文')
+    assert.deepEqual(composer.attachmentIds, ['existing-1'])
+    assert.deepEqual(drafted, [])
+
+    // A composer opened after the headings were converted but before the
+    // layout was compacted holds the sparse text; it is replaceable too.
+    composer.draft = '旧模板正文 稀疏版'
+    composer.attachmentIds = []
+    drafted.length = 0
+    const sparseComposer = await api.prepareDraft({
+      sessionId: 'session-new',
+      draft: { text: '新正文', previousText: '更早的旧模板', previousTextUpgraded: '旧模板正文 稀疏版', assets },
+    })
+    assert.equal(sparseComposer.attachments, 2)
+    assert.equal(composer.draft, '新正文')
+    assert.deepEqual(composer.attachmentIds, ['draft-0', 'draft-1'])
+
+    // If the composer refuses the replacement, the operator has not edited it
+    // either — the attachments must still be restored instead of dropped.
+    composer.draft = '旧模板正文'
+    composer.attachmentIds = []
+    refuseReplace = true
+    drafted.length = 0
+    const kept = await api.prepareDraft({
+      sessionId: 'session-new',
+      draft: { text: '新正文', previousText: '旧模板正文', assets },
+    })
+    assert.equal(kept.attachments, 2)
+    assert.equal(kept.preserved, undefined)
+    assert.equal(composer.draft, '旧模板正文')
+    assert.deepEqual(composer.attachmentIds, ['draft-0', 'draft-1'])
   } finally {
     globalThis.fetch = originalFetch
   }

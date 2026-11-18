@@ -135,6 +135,49 @@ test('old flat settings and records are readable, and concurrent state writes pr
   assert.equal((await store.loadSettings()).baseBranch, 'develop')
 })
 
+test('stored Markdown drafts are upgraded to the plain-text brief on read', async () => {
+  const legacyText = '# 禅道用户需求 ##4：测试用户需求\n\n## 需求内容\n\n测试用户需求' +
+    '\n\n## 参考资料\n\n- 附件：入仓单.xlsx' +
+    '\n\n## 工作环境\n\n- 仓库：`/tmp/wt`\n\n## 执行要求\n\n1. 先阅读需求'
+  await store.saveState({
+    'zentao:story-4': {
+      sessionId: 'legacy-session',
+      draft: { text: legacyText },
+      previousSessions: [{ sessionId: 'older-session', draft: { text: legacyText } }],
+    },
+  })
+  const record = await store.findDispatch('zentao', 'story-4')
+  assert.match(record.draft.text, /^禅道用户需求 #4：测试用户需求/)
+  assert.match(record.draft.text, /【需求内容】/)
+  assert.match(record.draft.text, /【参考资料】/)
+  assert.doesNotMatch(record.draft.text, /##|工作环境|执行要求/)
+  // The composer still holds the old text; naming it lets the Client replace
+  // an untouched composer and re-attach the screenshots.
+  assert.equal(record.draft.previousText, legacyText)
+  // The brief itself is compact: header lines together, no empty line under a
+  // section label, no empty lines inside the description.
+  assert.equal(
+    record.draft.text,
+    '禅道用户需求 #4：测试用户需求\n\n【需求内容】\n测试用户需求\n\n【参考资料】\n- 附件：入仓单.xlsx',
+  )
+  // A composer opened between the heading upgrade and the layout compaction
+  // holds the sparse text; it is replaceable too.
+  assert.equal(
+    record.draft.previousTextUpgraded,
+    '禅道用户需求 #4：测试用户需求\n\n【需求内容】\n\n测试用户需求\n\n【参考资料】\n\n- 附件：入仓单.xlsx',
+  )
+  assert.match(record.previousSessions[0].draft.text, /【需求内容】/)
+  assert.equal(record.previousSessions[0].draft.previousText, legacyText)
+  assert.doesNotMatch(record.previousSessions[0].draft.text, /##|工作环境/)
+  // A draft stored with the plain-text but sparse layout is compacted on read
+  // as well, so the operator does not have to wait for a re-dispatch.
+  await store.saveState({ 'tapd:9': { sessionId: 'sparse', draft: { text: 'TAPD需求 #9：稀疏\n\n【需求内容】\n\n正文\n\n【参考资料】\n\n- 附件：a.pdf' } } })
+  const sparse = (await store.loadState())['tapd:9']
+  assert.equal(sparse.draft.text, 'TAPD需求 #9：稀疏\n\n【需求内容】\n正文\n\n【参考资料】\n- 附件：a.pdf')
+  assert.equal(sparse.draft.previousText, 'TAPD需求 #9：稀疏\n\n【需求内容】\n\n正文\n\n【参考资料】\n\n- 附件：a.pdf')
+  assert.equal(sparse.draft.previousTextUpgraded, undefined)
+})
+
 test('session lookup errors stay distinct from archived sessions and blank drafts', async () => {
   await store.saveState({ [STORY_ID]: { sessionId: 'old-tapd', draft: { text: 'old draft' } } })
   const item = { sessionId: 'old-tapd', blank: true }
@@ -213,6 +256,9 @@ test('explicit continuation uses the selected session and leaves old attachments
   assert.equal(result.sessionId, 'original')
   assert.equal(result.continuation, true)
   assert.match(result.draft.text, /最新需求正文[\s\S]*继续测试/)
+  // The session may still show its unsent old draft; the Client can replace an
+  // untouched composer only when it knows that text.
+  assert.equal(result.draft.previousText, '旧草稿')
   const bytes = await host.request('asset', { session: 'original', i: 0, draftId: result.draft.draftId })
   assert.equal(await bytes.text(), 'new attachment')
   assert.equal(await (await host.request('asset', { session: 'original', i: 0 })).text(), 'old asset')
@@ -259,7 +305,7 @@ test('new conversation reuses the original worktree, retries its draft, and keep
   assert.equal(result.workspaceId, original.workspaceId)
   assert.equal(result.branch, original.branch)
   assert.equal(result.worktreePath, original.worktreePath)
-  assert.match(result.draft.text, /feature\/original/)
+  assert.doesNotMatch(result.draft.text, /feature\/original/)
   assert.equal(result.draftPending, false)
   assert.equal(result.previousSessions[0].sessionId, 'original')
   assert.equal((await host.value('dispatch', request)).sessionId, result.sessionId)

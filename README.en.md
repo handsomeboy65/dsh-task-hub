@@ -68,11 +68,11 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
 2. Click **Dispatch agent** on an item.
 3. For tasks with a linked session, choose **Continue conversation** or **New conversation**. Continuing opens a linked session in its current workspace and prepares the latest task draft. Existing composer content is preserved. A new conversation reuses the task branch. If the original workspace is on another branch, the plugin uses an existing worktree for the task branch or prepares one. For the first dispatch, select the workspace, enter the branch name, and choose the worktree and base branch.
 
-   Extra instructions are appended after the generated brief (title, description, attachments, screenshots, working agreement) under `## Extra instructions`; they never replace the story text.
+   Extra instructions are appended after the generated brief (title, description, attachments, screenshots) under `【补充要求】`; they never replace the story text.
 4. After confirming the first dispatch, the plugin runs these steps in order.
    - `git worktree add -b <branch>` (or `checkout -b` in place);
    - creates (or reuses) a DSH workspace on the worktree/repository and starts a session;
-   - writes the title, source link, parent requirement and associated app (when present), full description, reference assets, working environment (repository, branch, comparison baseline), and execution requirements into the new session's **composer draft**; management fields such as assignee, status, priority, iteration, and dates are omitted. Descriptions are not truncated; missing descriptions prompt the agent to read reference assets and clarify the goal;
+   - writes the title, source link, parent requirement and associated app (when present), full description, and reference assets into the new session's **composer draft**; sections are separated by plain-text labels such as `【需求内容】` and `【参考资料】` because the composer does not render Markdown; management fields such as assignee, status, priority, iteration, and dates are omitted. Descriptions are not truncated; missing descriptions prompt the agent to read reference assets and clarify the goal;
    - TAPD items bring their attachments (including parent/root stories) and description screenshots; ZenTao fetches item details, inline ZenTao images, and attachments. Those attachments are staged as draft attachments on the composer as well;
    - renames the session to `<branch> · <title>` and jumps to it.
    **Nothing is sent automatically**: once the session opens, the brief and its attachments sit in the composer, and you send when you are ready.

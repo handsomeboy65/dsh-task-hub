@@ -127,7 +127,7 @@ test('the dialog text only appends to the generated brief', async () => {
 
   const text = sessions.calls.prompt[0].content[0].text
   assert.match(text, /TAPD需求 #1004297/)
-  assert.match(text, /## 补充要求/)
+  assert.match(text, /【补充要求】/)
   assert.match(text, /只改导出接口，不要动前端。/)
   assert.equal(text.trimEnd().endsWith('只改导出接口，不要动前端。'), true)
 })
