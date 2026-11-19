@@ -149,7 +149,7 @@ test('an explicit prompt still replaces the generated brief', async () => {
   assert.equal(sessions.calls.prompt[0].content[0].text, '自定义说明')
 })
 
-test('in-place dispatch keeps untracked files and attaches real bytes', async () => {
+test('default dispatch checks out in place, keeps untracked files, and attaches real bytes', async () => {
   const repo = await tempRepo()
   await fs.writeFile(path.join(repo, 'notes.txt'), 'local notes\n')
   const registry = makeRegistry()
@@ -170,7 +170,6 @@ test('in-place dispatch keeps untracked files and attaches real bytes', async ()
       }),
       options: {
         branchName: 'issue_1004297', workspacePath: repo,
-        useWorktree: false,
         baseBranch: 'main',
         backupRoot: path.join(path.dirname(repo), `backups-${Date.now()}`),
       },

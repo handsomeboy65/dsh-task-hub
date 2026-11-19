@@ -59,7 +59,7 @@ Credentials are written to DSH `credentials` (they can also come from the enviro
 | --- | --- |
 | Default workspace | The DSH workspace preselected when dispatching (e.g. TMS2.0) |
 | Base branch | Leave blank to detect `origin/HEAD` |
-| Isolated worktree | On by default: creates `.dsh-worktrees/<repo>-<branch>` next to the repository so your current branch is left alone |
+| Dispatch checkout | Uses Smart Checkout in the selected workspace by default. Select **Use a separate worktree** to create `.dsh-worktrees/<repo>-<branch>` next to the repository |
 | Hide completed | The list shows only open items by default |
 
 ## Dispatch flow

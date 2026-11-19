@@ -440,12 +440,12 @@ function expand(node, out = []) {
   return out
 }
 
-test('dispatching a ZenTao business requirement preserves its type in the API request', async (testContext) => {
+test('first dispatch defaults to Smart Checkout even with old settings and preserves the ZenTao requirement type', async (testContext) => {
   let captured
   globalThis.window = { __ModuleLoader__: { load: (bundle) => { captured = bundle } } }
   await import('../lib/client.js')
   const story = { source: 'zentao', kind: 'story', requirementType: 'epic', id: 'story-3', shortId: '#3', name: '测试业务需求' }
-  const values = [null, {
+  const values = [{ settings: { useWorktree: true } }, {
     provider: 'zentao',
     stories: [story],
     statusOptions: { zentao: ['研发中', '测试中', '已发布'] },
@@ -490,6 +490,14 @@ test('dispatching a ZenTao business requirement preserves its type in the API re
   button('dispatch').props.onClick()
   const dialog = nodes()
   assert.equal(dialog.find((node) => node.props?.className === 'tt-chip tt-chip-id').props.children, '#3')
+  const checkoutOption = (label) => expand(nodes().find((node) => node.props?.className === 'tt-options'))
+    .find((node) => node.type === 'label' && node.props.children[1].props.children[0] === label)?.props.children[0]
+  assert.equal(checkoutOption('dispatchWorktree').props.checked, false)
+  assert.equal(checkoutOption('smartCheckout').props.checked, true)
+  checkoutOption('dispatchWorktree').props.onChange({ target: { checked: true } })
+  assert.equal(checkoutOption('smartCheckout'), undefined)
+  checkoutOption('dispatchWorktree').props.onChange({ target: { checked: false } })
+  assert.equal(checkoutOption('smartCheckout').props.checked, true)
   dialog.find((node) => node.props?.className === 'tt-input tt-input-key').props.onChange({ target: { value: 'issue_3' } })
   let request
   testContext.mock.method(globalThis, 'fetch', async (url, init) => {
@@ -499,6 +507,8 @@ test('dispatching a ZenTao business requirement preserves its type in the API re
   button('dispatchConfirm').props.onClick()
   assert.equal(request.url, '/api/task-hub/dispatch')
   assert.deepEqual(request.body.story, story)
+  assert.equal(request.body.useWorktree, false)
+  assert.equal(request.body.smartCheckout, true)
 })
 
 test('the ZenTao picker supports multiple checkboxes and keeps scope IDs separate', async () => {

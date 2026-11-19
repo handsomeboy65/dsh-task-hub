@@ -22,7 +22,7 @@ test('normalizeSettings fills defaults and dedupes projects', () => {
   const settings = normalizeSettings({ tapd: { projects: '100, 200,200,abc' } })
   assert.equal(settings.provider, 'tapd')
   assert.deepEqual(settings.tapd.projects, ['100', '200'])
-  assert.equal(settings.useWorktree, true)
+  assert.equal(settings.useWorktree, false)
   assert.equal(settings.excludeCompleted, true)
   assert.equal(settings.tapd.apiUser, '')
   assert.equal(settings.tapd.authMode, 'token')

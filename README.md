@@ -59,7 +59,7 @@ dsh plugin --profile web add github:handsomeboy65/dsh-task-hub
 | --- | --- |
 | 默认工作区 | 派发时默认选中的 DSH 工作区（如 TMS2.0） |
 | 基线分支 | 留空则自动探测 `origin/HEAD` |
-| 隔离 worktree | 默认开启：在仓库同级 `.dsh-worktrees/<仓库>-<分支>` 另开工作树，不打断你当前分支 |
+| 派发检出方式 | 默认在所选工作区使用 Smart Checkout。勾选「使用独立 worktree」可在仓库同级 `.dsh-worktrees/<仓库>-<分支>` 另开工作树 |
 | 默认只显示未完成任务 | 单来源默认打开「进行中」，可切到「已完成」查看历史任务 |
 
 ## 派发流程
